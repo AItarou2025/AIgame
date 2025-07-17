@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>モグラたたきゲーム</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; }
+    .grid { display: grid; grid-template-columns: repeat(3, 100px); justify-content: center; margin: 20px auto; }
+    .hole { width: 100px; height: 100px; border: 1px solid black; font-size: 24px; line-height: 100px; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+<h1>モグラたたき</h1>
+<p>スコア: <span id="score">0</span></p>
+<p>残り時間: <span id="time">30</span>秒</p>
+
+<div class="grid" id="gameGrid"></div>
+
+<button onclick="startGame()">ゲームスタート</button>
+
+<script>
+  const grid = document.getElementById('gameGrid');
+  const scoreDisplay = document.getElementById('score');
+  const timeDisplay = document.getElementById('time');
+
+  let score = 0;
+  let timeLeft = 30;
+  let timer;
+  let moleTimer;
+  let activeHole = null;
+
+  function startGame() {
+    score = 0;
+    timeLeft = 30;
+    scoreDisplay.textContent = score;
+    timeDisplay.textContent = timeLeft;
+    clearInterval(timer);
+    clearInterval(moleTimer);
+
+    timer = setInterval(() => {
+      timeLeft--;
+      timeDisplay.textContent = timeLeft;
+      if (timeLeft <= 0) {
+        clearInterval(timer);
+        clearInterval(moleTimer);
+        alert('ゲーム終了！あなたのスコアは ' + score + ' 点です');
+      }
+    }, 1000);
+
+    moleTimer = setInterval(spawnMole, 700);
+  }
+
+  function spawnMole() {
+    grid.innerHTML = '';
+    for (let i = 0; i < 9; i++) {
+      const hole = document.createElement('div');
+      hole.className = 'hole';
+      hole.textContent = '';
+      if (i === Math.floor(Math.random() * 9)) {
+        hole.textContent = '🐹';
+        activeHole = hole;
+        hole.onclick = () => {
+          score++;
+          scoreDisplay.textContent = score;
+          hole.textContent = '';
+        };
+      }
+      grid.appendChild(hole);
+    }
+  }
+</script>
+
+</body>
+</html>
