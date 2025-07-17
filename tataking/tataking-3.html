@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>モグラたたき 難易度設定付き</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; background: #f0f0f0; }
+    .grid { display: grid; grid-template-columns: repeat(3, 100px); justify-content: center; margin: 20px auto; }
+    .hole {
+      width: 100px; height: 100px; border: 1px solid black;
+      font-size: 40px; line-height: 100px; cursor: pointer;
+      background: white;
+      user-select: none;
+    }
+    button { margin: 10px; font-size: 18px; padding: 10px 20px; }
+    select { font-size: 18px; margin: 10px; }
+    .volume-control { margin: 10px auto; width: 200px; }
+  </style>
+</head>
+<body>
+
+<h1>モグラたたき</h1>
+
+<!-- 難易度選択 -->
+<p>
+  難易度：
+  <select id="difficultySelect">
+    <option value="easy">かんたん</option>
+    <option value="normal" selected>ふつう</option>
+    <option value="hard">むずかしい</option>
+  </select>
+</p>
+
+<!-- 音量調整 -->
+<div class="volume-control">
+  🎵 BGM音量：
+  <input type="range" id="bgmSlider" min="0" max="1" step="0.01" value="0.5">
+</div>
+<div class="volume-control">
+  🔊 効果音音量：
+  <input type="range" id="seSlider" min="0" max="1" step="0.01" value="1.0">
+</div>
+
+<p>ハイスコア: <span id="highScore">0</span> 点</p>
+<button onclick="startGame()">🎮 ゲームスタート</button>
+<button onclick="toggleBGM()">🎵 BGM: <span id="bgmStatus">オン</span></button>
+
+<div class="grid" id="gameGrid"></div>
+
+<!-- ローカル音声ファイル -->
+<audio id="hitSound" src="hit.mp3" preload="auto"></audio>
+<audio id="bgm" src="bgm.mp3" preload="auto" loop></audio>
+
+<script>
+  const grid = document.getElementById('gameGrid');
+  const highScoreDisplay = document.getElementById('highScore');
+  const hitSound = document.getElementById('hitSound');
+  const bgm = document.getElementById('bgm');
+  const bgmStatus = document.getElementById('bgmStatus');
+  const bgmSlider = document.getElementById('bgmSlider');
+  const seSlider = document.getElementById('seSlider');
+  const difficultySelect = document.getElementById('difficultySelect');
+
+  let score = 0;
+  let timeLeft = 30;
+  let timer;
+  let moleTimer;
+  let bgmOn = true;
+  let moleSpeed = 700; // 出現間隔（ミリ秒）
+
+  bgm.volume = parseFloat(bgmSlider.value);
+  hitSound.volume = parseFloat(seSlider.value);
+
+  bgmSlider.addEventListener('input', () => {
+    bgm.volume = parseFloat(bgmSlider.value);
+  });
+
+  seSlider.addEventListener('input', () => {
+    hitSound.volume = parseFloat(seSlider.value);
+  });
+
+  function startGame() {
+    setDifficulty();
+    score = 0;
+    timeLeft = 30;
+    clearInterval(timer);
+    clearInterval(moleTimer);
+
+    if (bgmOn) {
+      bgm.currentTime = 0;
+      bgm.play();
+    }
+
+    timer = setInterval(() => {
+      timeLeft--;
+      if (timeLeft <= 0) {
+        clearInterval(timer);
+        clearInterval(moleTimer);
+        bgm.pause();
+        alert('ゲーム終了！スコアは ' + score + ' 点です');
+        saveHighScore();
+      }
+    }, 1000);
+
+    moleTimer = setInterval(spawnMole, moleSpeed);
+  }
+
+  function setDifficulty() {
+    const diff = difficultySelect.value;
+    if (diff === 'easy') moleSpeed = 1000;        // 1秒ごと
+    else if (diff === 'normal') moleSpeed = 700;   // 0.7秒ごと
+    else if (diff === 'hard') moleSpeed = 400;     // 0.4秒ごと
+  }
+
+  function spawnMole() {
+    grid.innerHTML = '';
+    for (let i = 0; i < 9; i++) {
+      const hole = document.createElement('div');
+      hole.className = 'hole';
+      hole.textContent = '';
+      if (i === Math.floor(Math.random() * 9)) {
+        hole.textContent = '🐹';
+        hole.onclick = () => {
+          score++;
+          hole.textContent = '';
+          hitSound.currentTime = 0;
+          hitSound.volume = parseFloat(seSlider.value);
+          hitSound.play();
+        };
+      }
+      grid.appendChild(hole);
+    }
+  }
+
+  function saveHighScore() {
+    let highScore = localStorage.getItem('moleHighScore') || 0;
+    if (score > highScore) {
+      localStorage.setItem('moleHighScore', score);
+      alert('🎉 ハイスコア更新！ 🎉');
+    }
+    highScoreDisplay.textContent = localStorage.getItem('moleHighScore') || 0;
+  }
+
+  function toggleBGM() {
+    bgmOn = !bgmOn;
+    bgmStatus.textContent = bgmOn ? 'オン' : 'オフ';
+    if (!bgmOn) bgm.pause();
+  }
+
+  highScoreDisplay.textContent = localStorage.getItem('moleHighScore') || 0;
+</script>
+
+</body>
+</html>
