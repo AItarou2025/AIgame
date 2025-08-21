@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>たこ焼きゲーム・コンボ版</title>
+<style>
+  body { font-family: Arial; text-align: center; background: #ffe6cc; margin:0; padding:0;}
+  #game { display: grid; grid-template-columns: repeat(4,100px); gap:10px; justify-content:center; margin:20px auto;}
+  .tako { width:100px; height:100px; border-radius:50%; border:2px solid #333; cursor:pointer; background-size:cover; background-position:center; transition: transform 0.2s;}
+  .tako:active { transform: scale(0.9);}
+  #score,#combo { font-size:22px; margin:10px;}
+  #combo { color:red;}
+</style>
+</head>
+<body>
+<h1>たこ焼きゲーム・コンボ版</h1>
+<button id="startBtn">ゲーム開始</button>
+<div id="score">スコア:0</div>
+<div id="combo">コンボ:0</div>
+<div id="game"></div>
+
+<script>
+const game = document.getElementById('game');
+const scoreDisplay = document.getElementById('score');
+const comboDisplay = document.getElementById('combo');
+const startBtn = document.getElementById('startBtn');
+
+const images = [
+  "https://placehold.co/100x100/ffcccc/000000?text=生",
+  "https://placehold.co/100x100/ffff99/000000?text=半焼け",
+  "https://placehold.co/100x100/ccffcc/000000?text=ベスト",
+  "https://placehold.co/100x100/999999/ffffff?text=焦げ"
+];
+
+const levelTimes = [4000, 4000, 6000, 3000]; // ms
+let score = 0;
+let combo = 0;
+let playing = false;
+
+function setupGame() {
+  game.innerHTML = "";
+  for (let i = 0; i < 12; i++) {
+    const div = document.createElement('div');
+    div.className = 'tako';
+    div.dataset.level = 0;
+    div.style.backgroundImage = `url(${images[0]})`;
+    game.appendChild(div);
+
+    let level = 0;
+    let elapsed = 0;
+
+    const interval = setInterval(() => {
+      if (!playing) return;
+      elapsed += 500;
+
+      if (elapsed >= levelTimes[level]) {
+        level++;
+        elapsed = 0;
+        if (level >= images.length) {
+          // 焦げたらスコアマイナス＆コンボリセット
+          score -= 5;
+          combo = 0;
+          scoreDisplay.textContent = `スコア:${score}`;
+          comboDisplay.textContent = `コンボ:${combo}`;
+          level = 0;
+        }
+        div.dataset.level = level;
+        div.style.backgroundImage = `url(${images[level]})`;
+      }
+    }, 500);
+
+    div.addEventListener('click', () => {
+      if (!playing) return;
+      const currentLevel = parseInt(div.dataset.level);
+      if (currentLevel === 2) { // ベスト
+        score += 10 + combo*2;
+        combo++;
+      } else if (currentLevel === 3) { // 焦げ
+        score += 2;
+        combo = 0;
+      } else { // 生 or 半焼け
+        score -= 5;
+        combo = 0;
+      }
+      scoreDisplay.textContent = `スコア:${score}`;
+      comboDisplay.textContent = `コンボ:${combo}`;
+      // クリックで即リセット
+      level = 0; elapsed = 0;
+      div.dataset.level = 0;
+      div.style.backgroundImage = `url(${images[0]})`;
+    });
+  }
+}
+
+startBtn.addEventListener('click', () => {
+  score = 0;
+  combo = 0;
+  playing = true;
+  scoreDisplay.textContent = `スコア:${score}`;
+  comboDisplay.textContent = `コンボ:${combo}`;
+});
+
+setupGame();
+</script>
+</body>
+</html>

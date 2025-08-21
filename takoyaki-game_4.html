@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>たこ焼きを焼こう！（遊びやすい版）</title>
+  <style>
+    body {
+      font-family: "Arial", sans-serif;
+      text-align: center;
+      background: #ffe6cc;
+      margin: 0;
+      padding: 0;
+    }
+    h1 { margin: 20px 0 10px; }
+    #controls { margin: 10px; }
+    #game {
+      display: grid;
+      grid-template-columns: repeat(4, 100px);
+      gap: 10px;
+      justify-content: center;
+      margin: 20px auto;
+      max-width: 500px;
+    }
+    .tako {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      border: 2px solid #333;
+      cursor: pointer;
+      background-size: cover;
+      background-position: center;
+      transition: transform 0.2s;
+    }
+    .tako:active { transform: scale(0.9); }
+    #score, #time { font-size: 22px; margin: 10px; }
+    #combo { font-size: 18px; color: red; margin: 5px; }
+  </style>
+</head>
+<body>
+  <h1>たこ焼きを焼こう！（遊びやすい版）</h1>
+  <div id="controls">
+    <button id="startBtn">▶ ゲーム開始</button>
+    <button id="bgmToggle">🔊 BGM オン/オフ</button>
+  </div>
+  <div id="time">残り時間: 30</div>
+  <div id="score">スコア: 0</div>
+  <div id="combo">コンボ: 0</div>
+  <div id="game"></div>
+
+  <!-- 効果音とBGM -->
+  <audio id="bgm" loop src="https://actions.google.com/sounds/v1/ambiences/restaurant_room.ogg"></audio>
+  <audio id="seClick" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg"></audio>
+  <audio id="sePerfect" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+  <audio id="seBurn" src="https://actions.google.com/sounds/v1/cartoon/siren_whistle.ogg"></audio>
+
+  <script>
+    const game = document.getElementById('game');
+    const scoreDisplay = document.getElementById('score');
+    const timeDisplay = document.getElementById('time');
+    const comboDisplay = document.getElementById('combo');
+    const startBtn = document.getElementById('startBtn');
+    const bgmToggle = document.getElementById('bgmToggle');
+    const bgm = document.getElementById('bgm');
+    const seClick = document.getElementById('seClick');
+    const sePerfect = document.getElementById('sePerfect');
+    const seBurn = document.getElementById('seBurn');
+
+    let score = 0;
+    let combo = 0;
+    let timeLeft = 30;
+    let timer;
+    let playing = false;
+
+    const images = [
+      "https://placehold.co/100x100/ffcccc/000000?text=生",
+      "https://placehold.co/100x100/ffff99/000000?text=半焼け",
+      "https://placehold.co/100x100/ccffcc/000000?text=ベスト",
+      "https://placehold.co/100x100/999999/ffffff?text=焦げ"
+    ];
+
+    // 調整済みの焼き時間（ms）
+    const levelTimes = [4000, 4000, 6000, 3000]; 
+    // 生→半焼け:4秒, 半焼け→ベスト:4秒, ベスト維持:6秒, ベスト→焦げ:3秒
+
+    function setupGame() {
+      game.innerHTML = "";
+      for (let i = 0; i < 12; i++) {
+        const div = document.createElement('div');
+        div.className = 'tako';
+        div.dataset.level = 0;
+        div.style.backgroundImage = `url(${images[0]})`;
+        game.appendChild(div);
+
+        // 各たこ焼きの焼き進行
+        function advanceLevel() {
+          if (!playing) return;
+
+          let level = parseInt(div.dataset.level);
+          level++;
+
+          if (level >= images.length) {
+            // 焦げたらスコアマイナス & コンボリセット
+            score -= 5;
+            combo = 0;
+            scoreDisplay.textContent = `スコア: ${score}`;
+            comboDisplay.textContent = `コンボ: ${combo}`;
+            level = 0; // リセット
+          }
+
+          div.dataset.level = level;
+          div.style.backgroundImage = `url(${images[level]})`;
+
+          setTimeout(advanceLevel, levelTimes[level]);
+        }
+
+        setTimeout(advanceLevel, levelTimes[0]);
+
+        // クリック処理
+        div.addEventListener('click', () => {
+          if (!playing) return;
+          const currentLevel = parseInt(div.dataset.level);
+          seClick.currentTime = 0; seClick.play();
+          if (currentLevel === 2) { // ベスト
+            score += 10 + combo*2; combo++;
+            sePerfect.currentTime = 0; sePerfect.play();
+          } else if (currentLevel === 3) { // 焦げ
+            score += 2; combo = 0; seBurn.currentTime = 0; seBurn.play();
+          } else { // 生 or 半焼け
+            score -= 5; combo = 0;
+          }
+          scoreDisplay.textContent = `スコア: ${score}`;
+          comboDisplay.textContent = `コンボ: ${combo}`;
+          // クリックで即リセット
+          div.dataset.level = 0;
+          div.style.backgroundImage = `url(${images[0]})`;
+        });
+      }
+    }
+
+    function startGame() {
+      score = 0; combo = 0; timeLeft = 30; playing = true;
+      scoreDisplay.textContent = "スコア: 0";
+      comboDisplay.textContent = "コンボ: 0";
+      timeDisplay.textContent = `残り時間: ${timeLeft}`;
+      if (timer) clearInterval(timer);
+      timer = setInterval(() => {
+        timeLeft--; timeDisplay.textContent = `残り時間: ${timeLeft}`;
+        if (timeLeft <= 0) {
+          clearInterval(timer); playing = false;
+          alert(`終了！ あなたのスコアは ${score} 点でした！`);
+        }
+      }, 1000);
+    }
+
+    startBtn.addEventListener('click', startGame);
+
+    bgmToggle.addEventListener('click', () => {
+      if (bgm.paused) bgm.play(); else bgm.pause();
+    });
+
+    setupGame();
+  </script>
+</body>
+</html>

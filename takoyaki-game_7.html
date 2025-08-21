@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>たこ焼きゲーム・毒＋ランダム焼き＋演出＋ダミーランキング</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<style>
+  body { font-family: Arial; text-align: center; background: #ffe6cc; margin:0; padding:0;}
+  #controls { margin:10px; }
+  button { font-size:18px; padding:8px 12px; margin:2px; }
+  #game { display: grid; grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); gap:10px; justify-content:center; margin:10px auto; max-width:100%; }
+  .tako { width:60px; height:60px; border-radius:50%; border:2px solid #333; cursor:pointer; background-size:cover; background-position:center; transition: transform 0.2s; position: relative;}
+  .tako:active { transform: scale(0.9);}
+  .poison::after { content: "☠"; position:absolute; top:0; left:0; width:100%; height:100%; display:flex; justify-content:center; align-items:center; font-size:28px; color:red; }
+  .effect { position:absolute; width:60px; height:60px; border-radius:50%; background:rgba(255,255,0,0.6); top:0; left:0; pointer-events:none; animation:flash 0.5s ease-out;}
+  @keyframes flash { from {transform:scale(0.5); opacity:1;} to {transform:scale(1.5); opacity:0;} }
+  #score,#combo,#time { font-size:20px; margin:5px;}
+  #combo { color:red;}
+  #ranking { margin-top:10px; font-size:16px; }
+</style>
+</head>
+<body>
+<h1>たこ焼きゲーム・毒＋演出＋ダミーランキング</h1>
+<div id="controls">
+  <button id="startBtn">ゲーム開始</button>
+  難易度:
+  <select id="difficulty">
+    <option value="slow">ゆっくり</option>
+    <option value="normal" selected>普通</option>
+    <option value="fast">早い</option>
+  </select>
+  <button id="bgmToggle">BGMオン/オフ</button>
+  <button id="fullscreenBtn">フルスクリーン</button>
+</div>
+<div id="time">残り時間: 30</div>
+<div id="score">スコア:0</div>
+<div id="combo">コンボ:0</div>
+<div id="game"></div>
+<div id="ranking">
+  <strong>ランキング</strong>
+  <ol id="rankingList"></ol>
+</div>
+
+<audio id="bgm" loop src="https://actions.google.com/sounds/v1/ambiences/restaurant_room.ogg"></audio>
+<audio id="seClick" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg"></audio>
+<audio id="sePerfect" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+<audio id="seBurn" src="https://actions.google.com/sounds/v1/cartoon/siren_whistle.ogg"></audio>
+<audio id="sePoison" src="https://actions.google.com/sounds/v1/cartoon/metal_clang.ogg"></audio>
+<audio id="seBonus" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg"></audio>
+
+<script>
+const game=document.getElementById('game');
+const scoreDisplay=document.getElementById('score');
+const comboDisplay=document.getElementById('combo');
+const timeDisplay=document.getElementById('time');
+const startBtn=document.getElementById('startBtn');
+const difficultySelect=document.getElementById('difficulty');
+const bgm=document.getElementById('bgm');
+const seClick=document.getElementById('seClick');
+const sePerfect=document.getElementById('sePerfect');
+const seBurn=document.getElementById('seBurn');
+const sePoison=document.getElementById('sePoison');
+const seBonus=document.getElementById('seBonus');
+const bgmToggle=document.getElementById('bgmToggle');
+const rankingList=document.getElementById('rankingList');
+const fullscreenBtn=document.getElementById('fullscreenBtn');
+
+const images=[
+  "https://placehold.co/100x100/ffcccc/000000?text=生",
+  "https://placehold.co/100x100/ffff99/000000?text=半焼け",
+  "https://placehold.co/100x100/ccffcc/000000?text=ベスト",
+  "https://placehold.co/100x100/999999/ffffff?text=焦げ"
+];
+const baseLevelTimes=[4000,4000,6000,3000];
+
+let score=0, combo=0, playing=false, timeLeft=30, timer;
+let ranking=[];
+
+function loadRanking(){
+  const saved = localStorage.getItem('takoyaki_ranking');
+  if(saved) ranking = JSON.parse(saved);
+  else{
+    // ダミーランキング追加
+    const dummyNames=["理論王","たこマスター","焼き職人","ネコ好き","AI太郎","たこ助","もぐもぐ","タコラ","ピカチュウ","ドラえもん"];
+    ranking = dummyNames.map((n,i)=>({name:n, score:Math.floor(Math.random()*200+50)}));
+    saveRanking();
+  }
+  updateRanking();
+}
+
+function saveRanking(){
+  localStorage.setItem('takoyaki_ranking', JSON.stringify(ranking));
+}
+
+function updateRanking(){
+  rankingList.innerHTML="";
+  ranking.slice(0,5).forEach(item=>{
+    const li=document.createElement('li');
+    li.textContent=`${item.name}: ${item.score}`;
+    rankingList.appendChild(li);
+  });
+}
+
+function setupGame(speedMultiplier=1){
+  game.innerHTML="";
+  for(let i=0;i<12;i++){
+    const div=document.createElement('div');
+    div.className='tako';
+    div.dataset.level='0';
+    div.dataset.poison='0';
+    div.style.backgroundImage=`url(${images[0]})`;
+    game.appendChild(div);
+
+    // タッチ対応
+    div.addEventListener('touchstart', (e)=>{ e.preventDefault(); div.click(); });
+
+    let level=0, elapsed=0;
+    let nextTime = baseLevelTimes[level] + (Math.random()*2000-1000); // ランダム焼き時間
+
+    const interval=setInterval(()=>{
+      if(!playing) return;
+      elapsed+=500;
+      if(elapsed>=nextTime/speedMultiplier){
+        // 毒たこ焼き判定
+        if(Math.random()<0.2){ div.dataset.poison='1'; } // 20%で毒
+        else div.dataset.poison='0';
+
+        level++;
+        elapsed=0;
+        nextTime = baseLevelTimes[level%images.length] + (Math.random()*2000-1000); // 次のランダム焼き時間
+        if(level>=images.length){ 
+          score-=5; combo=0; 
+          scoreDisplay.textContent=`スコア:${score}`; 
+          comboDisplay.textContent=`コンボ:${combo}`; 
+          level=0;
+        }
+        div.dataset.level=level%images.length;
+        div.style.backgroundImage=`url(${images[level%images.length]})`;
+      }
+      if(div.dataset.poison==='1') div.classList.add('poison');
+      else div.classList.remove('poison');
+    },500);
+
+    div.addEventListener('click',()=>{
+      if(!playing) return;
+      if(div.dataset.poison==='1'){
+        score-=20; combo=0;
+        sePoison.currentTime=0; sePoison.play();
+        showEffect(div,'red');
+        alert("毒たこ焼きだ！スコア大幅減少！");
+        div.dataset.poison='0';
+      } else {
+        const currentLevel=parseInt(div.dataset.level);
+        seClick.currentTime=0; seClick.play();
+        if(currentLevel===2){ score+=10+combo*2; combo++; sePerfect.currentTime=0; sePerfect.play(); showEffect(div,'yellow'); }
+        else if(currentLevel===3){ score+=2; combo=0; seBurn.currentTime=0; seBurn.play(); showEffect(div,'gray'); }
+        else { score-=5; combo=0; showEffect(div,'orange'); }
+      }
+      scoreDisplay.textContent=`スコア:${score}`;
+      comboDisplay.textContent=`コンボ:${combo}`;
+      level=0; elapsed=0;
+      div.dataset.level=0;
+      div.style.backgroundImage=`url(${images[0]})`;
+    });
+  }
+}
+
+function showEffect(div,color='yellow'){
+  const effect=document.createElement('div');
+  effect.className='effect';
+  effect.style.background=`${color==='red'?'rgba(255,0,0,0.6)':color==='gray'?'rgba(150,150,150,0.5)':'rgba(255,255,0,0.6)'}`;
+  div.appendChild(effect);
+  setTimeout(()=>{ effect.remove(); },500);
+}
+
+function startGame(){
+  score=0; combo=0; timeLeft=30; playing=true;
+  scoreDisplay.textContent=`スコア:${score}`;
+  comboDisplay.textContent=`コンボ:${combo}`;
+  timeDisplay.textContent=`残り時間:${timeLeft}`;
+
+  let multiplier=1;
+  const diff=difficultySelect.value;
+  if(diff==='slow') multiplier=0.7;
+  else if(diff==='normal') multiplier=1;
+  else if(diff==='fast') multiplier=1.5;
+
+  setupGame(multiplier);
+
+  if(timer) clearInterval(timer);
+  timer=setInterval(()=>{
+    if(!playing) return;
+    timeLeft--;
+    timeDisplay.textContent=`残り時間:${timeLeft}`;
+    if(timeLeft<=0){
+      playing=false;
+      clearInterval(timer);
+      const name=prompt("ゲーム終了！名前を入力してください","");
+      if(name){
+        ranking.push({name,score});
+        ranking.sort((a,b)=>b.score-a.score);
+        saveRanking();
+        updateRanking();
+      }
+      alert(`スコア:${score} コンボ:${combo}`);
+    }
+  },1000);
+}
+
+startBtn.addEventListener('click',startGame);
+bgmToggle.addEventListener('click',()=>{ if(bgm.paused) bgm.play(); else bgm.pause(); });
+fullscreenBtn.addEventListener('click',()=>{ if(document.fullscreenElement){ document.exitFullscreen(); } else { document.documentElement.requestFullscreen(); } });
+
+loadRanking();
+</script>
+</body>
+</html>
