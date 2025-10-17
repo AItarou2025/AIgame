@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>円環バトル — 360° Arena Shooter</title>
+<style>
+  html,body{height:100%;margin:0;background:#0b1020;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;}
+  #game {display:block;margin:0 auto;background:#061022;touch-action: none;}
+  .ui {
+    position: absolute; left:16px; top:16px;
+    font-size:14px; line-height:1.6;
+    background: rgba(0,0,0,0.25);
+    padding:8px 12px; border-radius:8px;
+    backdrop-filter: blur(4px);
+  }
+  .centerHint {
+    position:absolute; right:16px; top:16px; background:rgba(0,0,0,0.25);
+    padding:8px 12px; border-radius:8px; font-size:13px;
+  }
+  footer {position:fixed;left:0;right:0;bottom:8px;text-align:center;font-size:12px;color:#9db0ff;opacity:0.7}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div class="ui" id="hud">Score: 0<br>Lives: 3<br>Time: 60</div>
+<div class="centerHint">マウスで狙い方向が変わります（自動で連射）</div>
+<footer>円環バトル — 360° アリーナシューター</footer>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d', {alpha:false});
+  let W = canvas.width = Math.floor(window.innerWidth);
+  let H = canvas.height = Math.floor(window.innerHeight);
+  const hud = document.getElementById('hud');
+
+  // Game settings
+  const ROUND_TIME = 60; // seconds
+  const SPAWN_INTERVAL_BASE = 1000; // ms
+  const ENEMY_SPEED_BASE = 0.07; // ゆっくり
+  const PLAYER_RADIUS = 18;
+  const BULLET_SPEED = 0.9; // px/ms
+  const FIRE_COOLDOWN = 180; // ms
+  const PARTICLE_COUNT = 12;
+
+  // State
+  let lastTime = performance.now();
+  let mouse = {x: W/2, y: H/2};
+  let player = {x: W/2, y: H/2, angle: 0};
+  let bullets = [];
+  let enemies = [];
+  let particles = [];
+  let score = 0;
+  let lives = 3;
+  let elapsed = 0;
+  let spawnTimer = 0;
+  let fireTimer = 0;
+  let roundOver = false;
+  let roundStart = performance.now();
+
+  // Utility
+  function rand(min, max){ return Math.random()*(max-min)+min; }
+  function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }
+
+  // Resize handling
+  window.addEventListener('resize', () => {
+    W = canvas.width = Math.floor(window.innerWidth);
+    H = canvas.height = Math.floor(window.innerHeight);
+    player.x = W/2; player.y = H/2;
+  });
+
+  // Input
+  canvas.addEventListener('mousemove', (e) => {
+    const r = canvas.getBoundingClientRect();
+    mouse.x = (e.clientX - r.left) * (canvas.width / r.width);
+    mouse.y = (e.clientY - r.top) * (canvas.height / r.height);
+  });
+  canvas.addEventListener('touchmove', (e)=>{
+    e.preventDefault();
+    const t = e.touches[0];
+    const r = canvas.getBoundingClientRect();
+    mouse.x = (t.clientX - r.left) * (canvas.width / r.width);
+    mouse.y = (t.clientY - r.top) * (canvas.height / r.height);
+  }, {passive:false});
+  window.addEventListener('keydown', (e)=>{
+    if(e.code === 'KeyR' && roundOver) resetGame();
+  });
+
+  // Spawn enemy at ring
+  function spawnEnemy(difficulty){
+    const angle = rand(0, Math.PI*2);
+    const ring = Math.min(W,H) * 0.48;
+    const x = player.x + Math.cos(angle) * ring;
+    const y = player.y + Math.sin(angle) * ring;
+    const speed = ENEMY_SPEED_BASE + difficulty * 0.03 + rand(-0.03,0.03);
+    const size = 30 + Math.random()*15;
+    enemies.push({x,y,angle: angle + Math.PI, speed, r: size, hp: 1}); // ★ HP固定 = 1
+  }
+
+  // Shoot bullet
+  function shoot(angle){
+    const now = performance.now();
+    if(now - fireTimer < FIRE_COOLDOWN) return;
+    fireTimer = now;
+    bullets.push({
+      x: player.x + Math.cos(angle)*(PLAYER_RADIUS+6),
+      y: player.y + Math.sin(angle)*(PLAYER_RADIUS+6),
+      dx: Math.cos(angle)*BULLET_SPEED,
+      dy: Math.sin(angle)*BULLET_SPEED,
+      life: 2000 // ms
+    });
+  }
+
+  // Particle
+  function spawnParticles(x,y,baseAngle,strength){
+    for(let i=0;i<PARTICLE_COUNT;i++){
+      const a = baseAngle + rand(-1,1);
+      particles.push({
+        x,y,dx:Math.cos(a)*rand(0.05,0.7)*strength, dy:Math.sin(a)*rand(0.05,0.7)*strength,
+        life: rand(300,900), size: rand(1,4)
+      });
+    }
+  }
+
+  // Reset
+  function resetGame(){
+    bullets = []; enemies = []; particles = [];
+    score = 0; lives = 3; elapsed = 0; spawnTimer = 0; roundOver = false;
+    roundStart = performance.now();
+    lastTime = performance.now();
+  }
+
+  // Main loop
+  function loop(now){
+    const dt = Math.min(40, now - lastTime); 
+    lastTime = now;
+    if(roundOver === false) elapsed = (now - roundStart) / 1000;
+
+    // Update player angle to face cursor
+    player.angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+
+    // 自動射撃
+    if(!roundOver) shoot(player.angle);
+
+    // Spawn logic
+    spawnTimer += dt;
+    const difficulty = Math.min(8, Math.floor(elapsed / 8));
+    const spawnInterval = Math.max(300, SPAWN_INTERVAL_BASE - difficulty*90);
+    if(spawnTimer > spawnInterval && !roundOver){
+      spawnTimer = 0;
+      spawnEnemy(difficulty + Math.random()*1.5);
+    }
+
+    // Update bullets
+    for(let i=bullets.length-1;i>=0;i--){
+      const b = bullets[i];
+      b.x += b.dx * dt;
+      b.y += b.dy * dt;
+      b.life -= dt;
+      if(b.life <= 0 || b.x < -50 || b.x > W+50 || b.y < -50 || b.y > H+50) bullets.splice(i,1);
+    }
+
+    // Update enemies
+    for(let i=enemies.length-1;i>=0;i--){
+      const e = enemies[i];
+      const ang = Math.atan2(player.y - e.y, player.x - e.x);
+      e.x += Math.cos(ang) * e.speed * dt;
+      e.y += Math.sin(ang) * e.speed * dt;
+
+      // Collision with player
+      if(dist(e, player) < PLAYER_RADIUS + e.r){
+        spawnParticles(e.x, e.y, ang + Math.PI, 1.5);
+        enemies.splice(i,1);
+        lives -= 1;
+        if(lives <= 0) roundOver = true;
+        continue;
+      }
+
+      // Hit by bullets
+      for(let j=bullets.length-1;j>=0;j--){
+        const b = bullets[j];
+        if(Math.hypot(b.x - e.x, b.y - e.y) < e.r + 4){
+          bullets.splice(j,1);
+          e.hp -= 1;
+          spawnParticles(b.x, b.y, Math.atan2(e.y-b.y, e.x-b.x), 1.0);
+          if(e.hp <= 0){
+            score += 10;
+            enemies.splice(i,1);
+            break;
+          }
+        }
+      }
+    }
+
+    // Update particles
+    for(let i=particles.length-1;i>=0;i--){
+      const p = particles[i];
+      p.x += p.dx * dt;
+      p.y += p.dy * dt;
+      p.life -= dt;
+      if(p.life <= 0) particles.splice(i,1);
+    }
+
+    // Round end condition
+    if(elapsed >= ROUND_TIME && !roundOver) {
+      roundOver = true;
+    }
+
+    // Draw
+    draw();
+
+    // HUD
+    hud.innerHTML = `Score: ${score}<br>Lives: ${lives}<br>Time: ${Math.max(0,Math.ceil(ROUND_TIME - elapsed))}`;
+
+    if(!roundOver) requestAnimationFrame(loop);
+    else {
+      drawGameOver();
+    }
+  }
+
+  // Drawing routines
+  function draw(){
+    ctx.fillStyle = '#061022';
+    ctx.fillRect(0,0,W,H);
+
+    // arena ring
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    const ringR = Math.min(W,H)*0.48;
+    ctx.beginPath();
+    ctx.arc(0,0,ringR,0,Math.PI*2);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(80,120,255,0.06)';
+    ctx.stroke();
+    ctx.restore();
+
+    // bullets
+    ctx.fillStyle = '#ffd875';
+    for(const b of bullets){
+      ctx.beginPath();
+      ctx.arc(b.x,b.y,4,0,Math.PI*2);
+      ctx.fill();
+    }
+
+    // enemies
+    for(const e of enemies){
+      ctx.save();
+      ctx.translate(e.x, e.y);
+      ctx.beginPath();
+      ctx.arc(0,0,e.r,0,Math.PI*2);
+      ctx.fillStyle = '#ff6b6b';
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // player
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    ctx.rotate(player.angle);
+    ctx.beginPath();
+    ctx.arc(0,0,PLAYER_RADIUS,0,Math.PI*2);
+    ctx.fillStyle = '#6ea8ff';
+    ctx.fill();
+    ctx.fillStyle = '#e6f0ff';
+    ctx.fillRect(0,-6,PLAYER_RADIUS+20,12);
+    ctx.beginPath();
+    ctx.arc(0,0,6,0,Math.PI*2);
+    ctx.fillStyle = '#0b1230';
+    ctx.fill();
+    ctx.restore();
+
+    // particles
+    for(const p of particles){
+      ctx.globalAlpha = Math.max(0, Math.min(1, p.life/900));
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+      ctx.fillStyle = '#ffd875';
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function drawGameOver(){
+    ctx.fillStyle = 'rgba(2,6,16,0.7)';
+    ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 40px system-ui, sans-serif';
+    ctx.fillText('ROUND OVER', W/2, H/2 - 40);
+    ctx.font = '24px system-ui, sans-serif';
+    ctx.fillText(`Score: ${score}`, W/2, H/2);
+    ctx.font = '16px system-ui, sans-serif';
+    ctx.fillText('Press R to restart', W/2, H/2 + 36);
+  }
+
+  // Start
+  resetGame();
+  requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
