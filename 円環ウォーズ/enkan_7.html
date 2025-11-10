@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>円環バトル — 360° Arena Shooter</title>
+<style>
+  html,body{height:100%;margin:0;background:#0b1020;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;}
+  #game {display:block;margin:0 auto;background:#061022;touch-action:none;}
+  .ui {
+    position:absolute; left:16px; top:16px;
+    font-size:14px; line-height:1.6;
+    background:rgba(0,0,0,0.25);
+    padding:8px 12px; border-radius:8px;
+    backdrop-filter:blur(4px);
+    display:none;
+  }
+  footer {position:fixed;left:0;right:0;bottom:8px;text-align:center;font-size:12px;color:#9db0ff;opacity:0.7}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div class="ui" id="hud">Score: 0<br>Lives: 3<br>Time: 60</div>
+<footer>円環バトル — 360° アリーナシューター</footer>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d', {alpha:false});
+  const hud = document.getElementById('hud');
+  let W = canvas.width = window.innerWidth;
+  let H = canvas.height = window.innerHeight;
+
+  // Game constants
+  const ROUND_TIME = 60;
+  const ENEMY_SPEED_BASE = 0.07;
+  const PLAYER_RADIUS = 18;
+  const BULLET_SPEED = 0.9;
+  const FIRE_COOLDOWN = 180;
+  const PARTICLE_COUNT = 12;
+
+  // State
+  let gameState = "title"; // title, playing, gameover
+  let lastTime = performance.now();
+  let mouse = {x: W/2, y: H/2};
+  let player = {x: W/2, y: H/2, angle: 0};
+  let bullets = [], enemies = [], particles = [];
+  let score = 0, lives = 3, elapsed = 0;
+  let spawnTimer = 0, fireTimer = 0, roundStart = 0;
+  let gameResult = "";
+
+  function rand(min,max){return Math.random()*(max-min)+min;}
+  function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+
+  function resize(){
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    player.x = W/2; player.y = H/2;
+  }
+  window.addEventListener('resize',resize);
+
+  // Input
+  canvas.addEventListener('mousemove',(e)=>{
+    const r = canvas.getBoundingClientRect();
+    mouse.x = (e.clientX - r.left) * (canvas.width / r.width);
+    mouse.y = (e.clientY - r.top) * (canvas.height / r.height);
+  });
+  canvas.addEventListener('click',()=>{ if(gameState==="title") startGame(); });
+  window.addEventListener('keydown',(e)=>{
+    if(e.code==="Space" && gameState==="title") startGame();
+    if(e.code==="KeyR" && gameState==="gameover") gameState="title";
+  });
+
+  function startGame(){
+    score=0; lives=3; elapsed=0;
+    bullets=[]; enemies=[]; particles=[];
+    spawnTimer=0; fireTimer=0;
+    roundStart=performance.now();
+    gameState="playing";
+    hud.style.display="block";
+    requestAnimationFrame(loop);
+  }
+
+  function spawnEnemy(diff){
+    const ang=rand(0,Math.PI*2);
+    const r=Math.min(W,H)*0.48;
+    const x=player.x+Math.cos(ang)*r;
+    const y=player.y+Math.sin(ang)*r;
+    enemies.push({x,y,speed:ENEMY_SPEED_BASE+diff*0.03+rand(-0.03,0.03),r:30+rand(0,15),hp:1});
+  }
+
+  function shoot(angle){
+    const now=performance.now();
+    if(now-fireTimer<FIRE_COOLDOWN)return;
+    fireTimer=now;
+    bullets.push({
+      x:player.x+Math.cos(angle)*(PLAYER_RADIUS+6),
+      y:player.y+Math.sin(angle)*(PLAYER_RADIUS+6),
+      dx:Math.cos(angle)*BULLET_SPEED,
+      dy:Math.sin(angle)*BULLET_SPEED,
+      life:2000
+    });
+  }
+
+  function spawnParticles(x,y,base,str){
+    for(let i=0;i<PARTICLE_COUNT;i++){
+      const a=base+rand(-1,1);
+      particles.push({
+        x,y,dx:Math.cos(a)*rand(0.05,0.7)*str,
+        dy:Math.sin(a)*rand(0.05,0.7)*str,
+        life:rand(300,900),size:rand(1,4)
+      });
+    }
+  }
+
+  function loop(now){
+    const dt=Math.min(40,now-lastTime); lastTime=now;
+    if(gameState!=="playing") return;
+    elapsed=(now-roundStart)/1000;
+    player.angle=Math.atan2(mouse.y-player.y,mouse.x-player.x);
+    shoot(player.angle);
+
+    spawnTimer+=dt;
+    const diff=Math.min(8,Math.floor(elapsed/8));
+    const interval=Math.max(300,1000-diff*90);
+    if(spawnTimer>interval){spawnTimer=0;spawnEnemy(diff+rand(0,1.5));}
+
+    bullets.forEach((b,i)=>{
+      b.x+=b.dx*dt; b.y+=b.dy*dt; b.life-=dt;
+      if(b.life<=0) bullets.splice(i,1);
+    });
+
+    enemies.forEach((e,i)=>{
+      const ang=Math.atan2(player.y-e.y,player.x-e.x);
+      e.x+=Math.cos(ang)*e.speed*dt;
+      e.y+=Math.sin(ang)*e.speed*dt;
+      if(dist(e,player)<PLAYER_RADIUS+e.r){
+        spawnParticles(e.x,e.y,ang+Math.PI,1.5);
+        enemies.splice(i,1); lives--;
+        if(lives<=0){gameState="gameover"; gameResult="Game Over";}
+      }
+      bullets.forEach((b,j)=>{
+        if(dist(b,e)<e.r+4){
+          bullets.splice(j,1);
+          e.hp--; spawnParticles(b.x,b.y,ang,1);
+          if(e.hp<=0){score+=10; enemies.splice(i,1);}
+        }
+      });
+    });
+
+    particles.forEach((p,i)=>{
+      p.x+=p.dx*dt; p.y+=p.dy*dt; p.life-=dt;
+      if(p.life<=0) particles.splice(i,1);
+    });
+
+    if(elapsed>=ROUND_TIME && gameState==="playing"){
+      gameState="gameover";
+      gameResult=(lives>0)?"🎉 ゲームクリア！ 🎉":"Game Over";
+    }
+
+    draw();
+    hud.innerHTML=`Score: ${score}<br>Lives: ${lives}<br>Time: ${Math.max(0,Math.ceil(ROUND_TIME-elapsed))}`;
+    if(gameState==="playing") requestAnimationFrame(loop);
+    else drawGameOver();
+  }
+
+  function draw(){
+    ctx.fillStyle="#061022"; ctx.fillRect(0,0,W,H);
+    ctx.save(); ctx.translate(player.x,player.y);
+    const ringR=Math.min(W,H)*0.48;
+    ctx.beginPath(); ctx.arc(0,0,ringR,0,Math.PI*2);
+    ctx.lineWidth=3; ctx.strokeStyle="rgba(80,120,255,0.06)"; ctx.stroke(); ctx.restore();
+
+    ctx.fillStyle="#ffd875";
+    bullets.forEach(b=>{ctx.beginPath();ctx.arc(b.x,b.y,4,0,Math.PI*2);ctx.fill();});
+    enemies.forEach(e=>{ctx.beginPath();ctx.arc(e.x,e.y,e.r,0,Math.PI*2);ctx.fillStyle="#ff6b6b";ctx.fill();});
+    ctx.save(); ctx.translate(player.x,player.y); ctx.rotate(player.angle);
+    ctx.beginPath(); ctx.arc(0,0,PLAYER_RADIUS,0,Math.PI*2); ctx.fillStyle="#6ea8ff"; ctx.fill();
+    ctx.fillStyle="#e6f0ff"; ctx.fillRect(0,-6,PLAYER_RADIUS+20,12);
+    ctx.restore();
+    particles.forEach(p=>{
+      ctx.globalAlpha=Math.max(0,Math.min(1,p.life/900));
+      ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+      ctx.fillStyle="#ffd875";ctx.fill();ctx.globalAlpha=1;
+    });
+  }
+
+  function drawGameOver(){
+    hud.style.display="none";
+    ctx.fillStyle="rgba(0,0,0,0.7)";
+    ctx.fillRect(0,0,W,H);
+    ctx.fillStyle="#fff"; ctx.textAlign="center";
+    ctx.font="bold 40px system-ui"; ctx.fillText(gameResult,W/2,H/2-40);
+    ctx.font="24px system-ui"; ctx.fillText(`Score: ${score}`,W/2,H/2);
+    ctx.font="16px system-ui"; ctx.fillText("Press R to return to Title",W/2,H/2+36);
+  }
+
+  function drawTitle(){
+    ctx.fillStyle="#061022"; ctx.fillRect(0,0,W,H);
+    ctx.textAlign="center"; ctx.fillStyle="#fff";
+    ctx.font="bold 60px system-ui"; ctx.fillText("円環バトル",W/2,H/2-40);
+    ctx.font="24px system-ui"; ctx.fillText("360° Arena Shooter",W/2,H/2);
+    ctx.font="18px system-ui"; ctx.fillText("クリックまたはスペースキーで開始",W/2,H/2+60);
+  }
+
+  function titleLoop(){
+    drawTitle();
+    if(gameState==="title") requestAnimationFrame(titleLoop);
+  }
+
+  resize();
+  titleLoop();
+})();
+</script>
+</body>
+</html>
