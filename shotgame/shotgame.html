@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>派手で複雑な弾幕ゲーム</title>
+<style>
+body { margin:0; background:#000; overflow:hidden; color:#fff; font-family:sans-serif; }
+canvas { display:block; background:#111; }
+#ui { position:absolute; top:10px; left:10px; font-size:18px; }
+#menu { position:absolute; top:50px; left:50%; transform:translateX(-50%); text-align:center; }
+button { margin:5px; padding:10px 20px; font-size:16px; }
+label { font-size:14px; margin-left:10px; }
+</style>
+</head>
+<body>
+<div id="ui"></div>
+<div id="menu">
+  <h1>弾幕ゲーム</h1>
+  <p>操作: マウスで移動, Space=縦弾, A=左弾, D=右弾</p>
+  <p>難易度を選択:</p>
+  <button id="easyBtn">Easy</button>
+  <button id="normalBtn">Normal</button>
+  <button id="hardBtn">Hard</button>
+  <div>
+    <label>BGM音量</label>
+    <input type="range" id="bgmVol" min="0" max="1" step="0.05" value="0.3">
+    <label>SE音量</label>
+    <input type="range" id="seVol" min="0" max="1" step="0.05" value="0.3">
+  </div>
+</div>
+<canvas id="gameCanvas"></canvas>
+
+<audio id="bgm" src="bgm.mp3" loop></audio>
+<audio id="shotSound" src="shot.wav"></audio>
+<audio id="gameoverSound" src="gameover.wav"></audio>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let mouse = {x: canvas.width/2, y: canvas.height/2};
+let bullets = [];
+let playerShots = [];
+let bosses = [];
+let gameOver = false;
+let startTime = 0;
+let difficulty = 0;
+let bossCount = 0;
+
+const player = {x: canvas.width/2, y: canvas.height/2, radius:15, color:'#0f0'};
+const bgm = document.getElementById('bgm');
+const shotSound = document.getElementById('shotSound');
+const gameoverSound = document.getElementById('gameoverSound');
+const bgmVol = document.getElementById('bgmVol');
+const seVol = document.getElementById('seVol');
+
+bgm.volume = parseFloat(bgmVol.value);
+shotSound.volume = parseFloat(seVol.value);
+gameoverSound.volume = parseFloat(seVol.value);
+
+bgmVol.addEventListener('input', ()=>{ bgm.volume=parseFloat(bgmVol.value); });
+seVol.addEventListener('input', ()=>{ shotSound.volume=parseFloat(seVol.value); gameoverSound.volume=parseFloat(seVol.value); });
+
+canvas.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+window.addEventListener('keydown', e => {
+  if(gameOver) return;
+  if(e.code==='Space') playerShots.push({x:player.x,y:player.y-20,radius:5,speed:8,dir:'up',color:'#0ff'});
+  if(e.code==='KeyA') playerShots.push({x:player.x,y:player.y,radius:5,speed:6,dir:'left',color:'#f0f'});
+  if(e.code==='KeyD') playerShots.push({x:player.x,y:player.y,radius:5,speed:6,dir:'right',color:'#f0f'});
+  shotSound.currentTime=0; shotSound.play();
+});
+
+function checkCollision(a,b){ const dx=a.x-b.x; const dy=a.y-b.y; return Math.sqrt(dx*dx+dy*dy)<a.radius+b.radius; }
+function randColor(){ return `hsl(${Math.random()*360},80%,50%)`; }
+
+function startGame(){
+  bullets=[]; playerShots=[]; bosses=[]; gameOver=false; startTime=Date.now(); bossCount=0;
+  document.getElementById('menu').style.display='none';
+  bgm.currentTime=0; bgm.play().catch(()=>{});
+  loop();
+}
+
+function spawnBulletPattern(){
+  if(gameOver) return;
+  const elapsed = (Date.now()-startTime)/1000;
+  if(elapsed < 3) return; // 安全時間3秒
+  const patternCount = 4 + difficulty*2;
+  for(let i=0;i<patternCount;i++){
+    const speed = 1 + Math.random()*0.5 + difficulty*0.5;
+    let startX = Math.random()*canvas.width;
+    bullets.push({x:startX,y:0,radius:10,speed:speed,dx:0,color:randColor()});
+  }
+}
+
+function spawnBoss(){
+  if(bosses.length>=2) return;
+  const type = Math.random()<0.5 ? 'vertical' : 'horizontal';
+  const x = type==='vertical' ? canvas.width/2 : Math.random()*(canvas.width-200)+100;
+  const y = type==='vertical' ? 100 : Math.random()*(canvas.height/3)+50;
+  const color = type==='vertical' ? '#ff0' : '#f0f';
+  bosses.push({x,y,radius:40,hp:50 + difficulty*50,color,time:0,type,dx: type==='horizontal'? 2 : 0,colorBar:'#f00'});
+}
+
+function onGameOver(){
+  gameOver=true;
+  document.getElementById('menu').style.display='block';
+  bgm.pause(); bgm.currentTime=0;
+  gameoverSound.currentTime=0; gameoverSound.play();
+}
+
+function update(){
+  if(gameOver) return;
+  player.x += (mouse.x - player.x)*0.2;
+  player.y += (mouse.y - player.y)*0.2;
+
+  bullets.forEach(b=>{ b.y += b.speed; b.x += b.dx; });
+  bullets = bullets.filter(b=>b.y<canvas.height+b.radius && b.x>-10 && b.x<canvas.width+10);
+
+  playerShots.forEach(s=>{
+    if(s.dir==='up') s.y -= s.speed;
+    else if(s.dir==='left') s.x -= s.speed;
+    else if(s.dir==='right') s.x += s.speed;
+  });
+  playerShots = playerShots.filter(s=>s.x>-10 && s.x<canvas.width+10 && s.y>-10 && s.y<canvas.height+10);
+
+  for(let b of bullets){ if(checkCollision(player,b)) onGameOver(); }
+
+  bosses.forEach(boss=>{
+    boss.time++;
+    if(boss.time % (120 - difficulty*10)===0){
+      const bulletNum = 6 + difficulty*2;
+      for(let i=0;i<bulletNum;i++){
+        const angle = (i/bulletNum)*Math.PI*2 + boss.time*0.05;
+        const speed = 1.5 + difficulty*0.2;
+        bullets.push({x:boss.x,y:boss.y,radius:8,speed:speed,dx:Math.cos(angle),color:boss.color});
+      }
+    }
+    if(boss.type==='horizontal'){
+      boss.x += boss.dx;
+      if(boss.x < 50 || boss.x > canvas.width-50) boss.dx*=-1;
+    }
+    for(let s of playerShots){ if(checkCollision(s,boss)){ boss.hp--; s.y=-10; } }
+  });
+
+  for(let i=bosses.length-1;i>=0;i--){ if(bosses[i].hp<=0){ bossCount++; bosses.splice(i,1); } }
+}
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle=player.color; ctx.beginPath(); ctx.arc(player.x,player.y,player.radius,0,Math.PI*2); ctx.fill();
+  bullets.forEach(b=>{ ctx.fillStyle=b.color; ctx.beginPath(); ctx.arc(b.x,b.y,b.radius,0,Math.PI*2); ctx.fill(); });
+  playerShots.forEach(s=>{ ctx.fillStyle=s.color; ctx.beginPath(); ctx.arc(s.x,s.y,s.radius,0,Math.PI*2); ctx.fill(); });
+  bosses.forEach(b=>{
+    ctx.fillStyle=b.color; ctx.beginPath(); ctx.arc(b.x,b.y,b.radius,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=b.colorBar; ctx.fillRect(b.x-40,b.y-50,80*(b.hp/(50+difficulty*50)),8);
+    ctx.strokeStyle='#fff';
+    ctx.strokeRect(b.x-40,b.y-50,80,8);
+  });
+  document.getElementById('ui').textContent = gameOver ? `ゲームオーバー! 倒したボス: ${bossCount}` :
+    `時間: ${((Date.now()-startTime)/1000).toFixed(1)} 秒 | 倒したボス: ${bossCount}`;
+}
+
+function loop(){ update(); draw(); requestAnimationFrame(loop); }
+
+setInterval(spawnBulletPattern, 600 - difficulty*50);
+setInterval(spawnBoss, 12000);
+
+document.getElementById('easyBtn').addEventListener('click',()=>{ difficulty=0; startGame(); });
+document.getElementById('normalBtn').addEventListener('click',()=>{ difficulty=1; startGame(); });
+document.getElementById('hardBtn').addEventListener('click',()=>{ difficulty=2; startGame(); });
+</script>
+</body>
+</html>
+
