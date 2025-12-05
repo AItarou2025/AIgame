@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ランダム迷路ゲーム</title>
+<style>
+body{margin:0;background:#0f1724;color:#e6eef8;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;overflow:hidden}
+canvas{background:#061226;border:2px solid #1e293b;border-radius:8px}
+#titleScreen{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-size:32px;z-index:10}
+.diff{margin:12px;font-size:26px;padding:10px 24px;border-radius:12px;background:#0b1220;color:#fff;border:2px solid #60a5fa;cursor:pointer}
+.diff:hover{transform:translateY(-2px)}
+</style>
+</head>
+<body>
+
+<div id="titleScreen">
+  <div style="margin-bottom:20px;font-size:42px;color:#60a5fa;">迷路ゲーム</div>
+  <button class="diff" data-sz="11">やさしい</button>
+  <button class="diff" data-sz="21">ふつう</button>
+  <button class="diff" data-sz="25">むずかしい</button>
+</div>
+
+<canvas id="c" width="640" height="640"></canvas>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  let cols = 21, rows = 21;
+  let maze=null;
+  let player={x:0,y:0};
+  let goal={x:0,y:0};
+  let cellSize=24;
+
+  class Cell{ constructor(x,y){ this.x=x;this.y=y;this.walls=[true,true,true,true];this.visited=false; } }
+
+  function genMaze(c,r){
+    cols=c; rows=r;
+    maze = Array.from({length:rows},(_,y)=>Array.from({length:cols},(_,x)=>new Cell(x,y)));
+    const start = maze[0][0];
+    start.visited = true;
+    const stack=[start];
+    while(stack.length){
+      const cur=stack[stack.length-1];
+      const nb=neighbours(cur).filter(n=>!n.cell.visited);
+      if(nb.length){
+        const pick=nb[Math.floor(Math.random()*nb.length)];
+        removeWall(cur,pick.dir);
+        pick.cell.visited=true;
+        stack.push(pick.cell);
+      }else stack.pop();
+    }
+    for(let r of maze)for(let c of r)c.visited=false;
+    player={x:0,y:0};
+    goal={x:cols-1,y:rows-1};
+    fitCellSize();
+    draw();
+  }
+
+  function neighbours(cell){
+    const out=[];
+    const{x,y}=cell;
+    if(y>0)out.push({cell:maze[y-1][x],dir:0});
+    if(x<cols-1)out.push({cell:maze[y][x+1],dir:1});
+    if(y<rows-1)out.push({cell:maze[y+1][x],dir:2});
+    if(x>0)out.push({cell:maze[y][x-1],dir:3});
+    return out;
+  }
+  function removeWall(cell,dir){
+    cell.walls[dir]=false;
+    const nx = cell.x+(dir===1?1:dir===3?-1:0);
+    const ny = cell.y+(dir===2?1:dir===0?-1:0);
+    maze[ny][nx].walls[(dir+2)%4]=false;
+  }
+
+  function fitCellSize(){
+    const pad=8;
+    const maxW=Math.floor((W-pad*2)/cols);
+    const maxH=Math.floor((H-pad*2)/rows);
+    cellSize=Math.min(maxW,maxH);
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    ctx.save(); ctx.translate(8,8);
+    ctx.strokeStyle='rgba(180,200,255,0.9)'; ctx.lineWidth=2;
+    for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+      const c=maze[y][x]; const sx=x*cellSize, sy=y*cellSize;
+      if(c.walls[0]) line(sx,sy,sx+cellSize,sy);
+      if(c.walls[1]) line(sx+cellSize,sy,sx+cellSize,sy+cellSize);
+      if(c.walls[2]) line(sx,sy+cellSize,sx+cellSize,sy+cellSize);
+      if(c.walls[3]) line(sx,sy,sx,sy+cellSize);
+    }
+    ctx.fillStyle='#34d399';
+    circle(goal.x,goal.y,0.33);
+    ctx.fillStyle='#f97316';
+    circle(player.x,player.y,0.28);
+    ctx.restore();
+  }
+
+  function line(x1,y1,x2,y2){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
+  function circle(cx,cy,r){ctx.beginPath();ctx.arc(cx*cellSize+cellSize/2,cy*cellSize+cellSize/2,cellSize*r,0,Math.PI*2);ctx.fill();}
+
+  function canMove(p,dir){return !maze[p.y][p.x].walls[dir];}
+  function step(p,dir){ return {x:p.x+(dir===1?1:dir===3?-1:0), y:p.y+(dir===2?1:dir===0?-1:0)} }
+
+  window.addEventListener('keydown',e=>{
+    const m={ArrowUp:0,ArrowRight:1,ArrowDown:2,ArrowLeft:3};
+    if(!(e.key in m)) return;
+    e.preventDefault();
+    const d=m[e.key];
+    if(canMove(player,d)){ player=step(player,d); draw(); }
+  });
+
+  document.querySelectorAll('.diff').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const s=parseInt(btn.dataset.sz,10);
+      genMaze(s,s);
+      document.getElementById('titleScreen').remove();
+    });
+  });
+})();
+</script>
+</body>
+</html>

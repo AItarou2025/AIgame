@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ランダム生成の迷路ゲーム（言葉で動かす）</title>
+  <style>
+    :root{ --bg:#0f1724; --panel:#0b1220; --accent:#60a5fa; --player:#f97316; --goal:#34d399 }
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    body{display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#071024,#081226);color:#e6eef8}
+    .wrap{width:980px;max-width:96vw;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:12px;padding:18px;box-shadow:0 8px 30px rgba(2,6,23,.6)}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    h1{font-size:18px;margin:0;color:var(--accent)}
+    .controls{display:flex;gap:8px;align-items:center}
+    button{background:var(--panel);border:1px solid rgba(255,255,255,0.04);color:inherit;padding:8px 10px;border-radius:8px;cursor:pointer}
+    button:hover{transform:translateY(-1px)}
+    .main{display:flex;gap:12px}
+    canvas{background:#061226;border-radius:8px;border:1px solid rgba(255,255,255,0.03)}
+    .sidebar{width:320px;min-width:220px}
+    .panel{background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.02);margin-bottom:8px}
+    label{display:block;font-size:13px;margin-bottom:6px;color:#cfe6ff}
+    input[type=range]{width:100%}
+    .command-row{display:flex;gap:8px}
+    input.command{flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+    .help{font-size:13px;color:#9fbce6;line-height:1.4}
+    .footer{font-size:13px;color:#9fbce6;margin-top:8px}
+    .small{font-size:12px;color:#9fbce6}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>ランダム生成の迷路ゲーム（言葉で動かす）</h1>
+      <div class="controls">
+        <button id="regen">迷路を再生成</button>
+        <button id="center">プレイヤーを初期位置へ</button>
+      </div>
+    </header>
+
+    <div class="main">
+      <canvas id="c" width="640" height="640"></canvas>
+
+      <aside class="sidebar">
+        <div class="panel">
+          <label>迷路サイズ: <span id="sizeLabel">21 x 21</span></label>
+          <input type="range" id="sizeRange" min="7" max="51" step="2" value="21">
+          <div class="small">矢印キーでも移動できます。言葉で動かす例:</div>
+          <div class="help" style="margin-top:6px">
+            日本語: 「上へ3マス」「右に2歩」「左 1」<br>
+            英語: "up 3", "right 2", "left 1"
+          </div>
+        </div>
+
+        <div class="panel">
+          <label>コマンド入力</label>
+          <div class="command-row">
+            <input id="cmd" class="command" placeholder="例: 上へ3マス または right 2">
+            <button id="run">実行</button>
+          </div>
+          <div class="small" style="margin-top:8px">複数コマンドはセミコロンで区切って順に実行できます。例: "右2; 上1; left 3"</div>
+        </div>
+
+        <div class="panel">
+          <div class="small">現在位置: <span id="pos">-</span></div>
+          <div class="small">ゴール: <span id="goal">-</span></div>
+          <div class="small" id="status">ステータス: ゲーム開始</div>
+        </div>
+
+        <div class="panel">
+          <div class="small">ヒント: 壁に沿って移動しよう。壁を越えられません。プレイヤーはスタート(左上)、ゴールは右下です。</div>
+        </div>
+
+      </aside>
+    </div>
+
+    <div class="footer">作成: ChatGPT — 要望があれば操作方法や見た目を調整します。</div>
+  </div>
+
+<script>
+(() => {
+  // --- 基本設定 ---
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  let cols = 21; // 奇数推奨
+  let rows = 21;
+  const sizeRange = document.getElementById('sizeRange');
+  const sizeLabel = document.getElementById('sizeLabel');
+  const regenBtn = document.getElementById('regen');
+  const centerBtn = document.getElementById('center');
+  const cmdInput = document.getElementById('cmd');
+  const runBtn = document.getElementById('run');
+  const posEl = document.getElementById('pos');
+  const goalEl = document.getElementById('goal');
+  const statusEl = document.getElementById('status');
+
+  const W = canvas.width;
+  const H = canvas.height;
+
+  let cellSize = 24;
+  let maze = null; // 2D array of cells
+  let player = {x:0,y:0};
+  let goal = {x:cols-1,y:rows-1};
+
+  function updateSizeLabel(){ sizeLabel.textContent = `${cols} x ${rows}` }
+
+  // --- 迷路セル ---
+  class Cell {
+    constructor(x,y){ this.x=x; this.y=y; this.walls=[true,true,true,true]; /* top,right,bottom,left */ this.visited=false }
+  }
+
+  // --- 迷路生成 (深さ優先スタック / recursive backtracker) ---
+  function genMaze(c,r){
+    cols = c; rows = r;
+    maze = Array.from({length:rows}, (_,y) => Array.from({length:cols}, (_,x) => new Cell(x,y)));
+
+    const start = maze[0][0];
+    start.visited = true;
+    const stack = [start];
+
+    while(stack.length){
+      const cur = stack[stack.length-1];
+      const nbs = neighbours(cur).filter(n => !n.cell.visited);
+      if(nbs.length){
+        const pick = nbs[Math.floor(Math.random()*nbs.length)];
+        const next = pick.cell;
+        // 壁を削る
+        removeWall(cur,pick.dir);
+        next.visited = true;
+        stack.push(next);
+      } else {
+        stack.pop();
+      }
+    }
+
+    // reset visited flags (not strictly necessary)
+    for(let row of maze) for(let ccell of row) ccell.visited=false;
+    player = {x:0,y:0};
+    goal = {x:cols-1,y:rows-1};
+    updateUI();
+    fitCellSize();
+    draw();
+  }
+
+  function neighbours(cell){
+    const out = [];
+    const {x,y} = cell;
+    if(y>0) out.push({cell:maze[y-1][x], dir:0});
+    if(x<cols-1) out.push({cell:maze[y][x+1], dir:1});
+    if(y<rows-1) out.push({cell:maze[y+1][x], dir:2});
+    if(x>0) out.push({cell:maze[y][x-1], dir:3});
+    return out;
+  }
+  function removeWall(cell,dir){
+    // dir relative to cell: 0 top,1 right,2 bottom,3 left
+    cell.walls[dir]=false;
+    const nx = cell.x + (dir===1?1:dir===3?-1:0);
+    const ny = cell.y + (dir===2?1:dir===0?-1:0);
+    const other = maze[ny][nx];
+    other.walls[(dir+2)%4] = false;
+  }
+
+  function fitCellSize(){
+    // canvas のサイズに収める
+    const pad = 8;
+    const maxCellW = Math.floor((W - pad*2) / cols);
+    const maxCellH = Math.floor((H - pad*2) / rows);
+    cellSize = Math.max(8, Math.min(maxCellW, maxCellH));
+  }
+
+  // --- 描画 ---
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    ctx.save();
+    ctx.translate(8,8);
+
+    // 背景グリッド
+    ctx.fillStyle = '#061226';
+    ctx.fillRect(-8,-8, W, H);
+
+    // 迷路の壁
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(180,200,255,0.9)';
+    for(let y=0;y<rows;y++){
+      for(let x=0;x<cols;x++){
+        const c = maze[y][x];
+        const sx = x*cellSize, sy = y*cellSize;
+        // top
+        if(c.walls[0]) drawLine(sx,sy,sx+cellSize,sy);
+        if(c.walls[1]) drawLine(sx+cellSize,sy,sx+cellSize,sy+cellSize);
+        if(c.walls[2]) drawLine(sx,sy+cellSize,sx+cellSize,sy+cellSize);
+        if(c.walls[3]) drawLine(sx,sy,sx,sy+cellSize);
+      }
+    }
+
+    // ゴール
+    const gx = goal.x*cellSize + cellSize/2;
+    const gy = goal.y*cellSize + cellSize/2;
+    ctx.beginPath(); ctx.arc(gx,gy,cellSize*0.35,0,Math.PI*2); ctx.fillStyle='#34d399'; ctx.fill();
+
+    // プレイヤー
+    const px = player.x*cellSize + cellSize/2;
+    const py = player.y*cellSize + cellSize/2;
+    ctx.beginPath(); ctx.arc(px,py,cellSize*0.3,0,Math.PI*2); ctx.fillStyle='#f97316'; ctx.fill();
+
+    ctx.restore();
+  }
+  function drawLine(x1,y1,x2,y2){ ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); }
+
+  // --- 移動ロジック ---
+  function canMove(from,dir){
+    // dir: 0 up,1 right,2 down,3 left
+    const c = maze[from.y][from.x];
+    return !c.walls[dir];
+  }
+  function step(from,dir){
+    if(!canMove(from,dir)) return from;
+    const nx = from.x + (dir===1?1:dir===3?-1:0);
+    const ny = from.y + (dir===2?1:dir===0?-1:0);
+    return {x:nx,y:ny};
+  }
+
+  // アニメーションして複数マス移動
+  let animQueue = Promise.resolve();
+  function movePlayerDirection(dir,steps=1){
+    animQueue = animQueue.then(() => new Promise(resolve => {
+      let remaining = steps;
+      function nextStep(){
+        if(remaining<=0){ resolve(); return; }
+        if(canMove(player,dir)){
+          player = step(player,dir);
+          updateUI();
+          draw();
+          if(player.x===goal.x && player.y===goal.y){ statusEl.textContent = 'ステータス: ゴール到達！おめでとう！'; }
+        } else {
+          statusEl.textContent = 'ステータス: 壁に当たった（移動中断）';
+          resolve(); return;
+        }
+        remaining--;
+        setTimeout(nextStep, 140);
+      }
+      nextStep();
+    }));
+    return animQueue;
+  }
+
+  function updateUI(){
+    posEl.textContent = `(${player.x}, ${player.y})`;
+    goalEl.textContent = `(${goal.x}, ${goal.y})`;
+  }
+
+  // --- コマンドパーサ ---
+  // 日本語と英語の簡易パーサ
+  function parseCommandText(text){
+    // セミコロン区切りで複数コマンド
+    const parts = text.split(/;|、|\n/).map(s=>s.trim()).filter(Boolean);
+    const cmds = [];
+    for(const p of parts){
+      // try japanese: 上へ3マス | 右に2歩 | 左 1
+      let m = p.match(/^(上|下|左|右)\s*(?:へ|に)?\s*(\d+)?/i);
+      if(m){
+        const d = m[1]; const n = parseInt(m[2]||'1',10);
+        const dir = (d==='上'?0: d==='右'?1: d==='下'?2:3);
+        cmds.push({dir,steps:n});
+        continue;
+      }
+      // english: up 3, left 2
+      m = p.match(/^(up|down|left|right)\s*(\d+)?/i);
+      if(m){
+        const d = m[1].toLowerCase(); const n = parseInt(m[2]||'1',10);
+        const dir = (d==='up'?0: d==='right'?1: d==='down'?2:3);
+        cmds.push({dir,steps:n});
+        continue;
+      }
+      // fallback: Japanese style '上へ3マス' capturing numbers with Kanji 'マス' or '歩'
+      m = p.match(/(上|下|左|右).*?(\d+)/);
+      if(m){ const d=m[1]; const n=parseInt(m[2],10); const dir=(d==='上'?0:d==='右'?1:d==='下'?2:3); cmds.push({dir,steps:n}); continue; }
+      // fallback for single kanji without number -> 1
+      m = p.match(/^(上|下|左|右)$/);
+      if(m){ const d=m[1]; const dir=(d==='上'?0:d==='右'?1:d==='下'?2:3); cmds.push({dir,steps:1}); continue; }
+      // if not understood, ignore
+    }
+    return cmds;
+  }
+
+  // --- イベント ---
+  sizeRange.addEventListener('input', ()=>{
+    const v = parseInt(sizeRange.value,10);
+    // force odd
+    const odd = v%2===1? v : v+1;
+    cols = rows = odd;
+    updateSizeLabel();
+    genMaze(cols,rows);
+  });
+
+  regenBtn.addEventListener('click', ()=> genMaze(cols,rows));
+  centerBtn.addEventListener('click', ()=>{ player={x:0,y:0}; statusEl.textContent='ステータス: プレイヤーを初期位置へ'; updateUI(); draw(); });
+  runBtn.addEventListener('click', ()=> runCommandString(cmdInput.value));
+  cmdInput.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); runCommandString(cmdInput.value); } });
+
+  // 矢印キーで逐次移動（1マス）
+  window.addEventListener('keydown', e=>{
+    const map = {ArrowUp:0, ArrowRight:1, ArrowDown:2, ArrowLeft:3};
+    if(e.key in map){ e.preventDefault(); movePlayerDirection(map[e.key],1); }
+  });
+
+  function runCommandString(text){
+    if(!text.trim()) return;
+    const cmds = parseCommandText(text);
+    if(cmds.length===0){ statusEl.textContent='ステータス: コマンドが解析できませんでした'; return; }
+    statusEl.textContent='ステータス: コマンド実行中...';
+    // chain promises to perform sequentially
+    let p = Promise.resolve();
+    for(const c of cmds){ p = p.then(()=> movePlayerDirection(c.dir, c.steps)); }
+    p.then(()=>{ statusEl.textContent='ステータス: コマンド完了'; updateUI(); draw(); });
+  }
+
+  // --- 初期化 ---
+  function init(){
+    updateSizeLabel();
+    genMaze(cols,rows);
+    updateUI();
+  }
+
+  init();
+
+})();
+</script>
+</body>
+</html>
