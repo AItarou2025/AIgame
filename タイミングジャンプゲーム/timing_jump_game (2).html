@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>タイミングジャンプゲーム（二段ジャンプ）</title>
+<style>
+body{
+  margin:0;
+  background:#0f1724;
+  color:#e6eef8;
+  font-family:system-ui;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:100vh;
+}
+#wrap{text-align:center}
+canvas{background:#061226;border:2px solid #1e293b;border-radius:12px}
+#info{margin-top:10px;font-size:18px}
+#title{
+  position:fixed;inset:0;background:rgba(0,0,0,0.85);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  z-index:10
+}
+button{
+  margin-top:16px;
+  font-size:20px;
+  padding:10px 26px;
+  border-radius:12px;
+  border:2px solid #60a5fa;
+  background:#0b1220;
+  color:#fff;
+  cursor:pointer
+}
+button:hover{transform:translateY(-2px)}
+</style>
+</head>
+<body>
+
+<div id="title">
+  <h1>タイミングジャンプゲーム</h1>
+  <p>スペースキーでジャンプ（2段ジャンプ可）</p>
+  <button id="start">ゲームスタート</button>
+</div>
+
+<div id="wrap">
+  <canvas id="c" width="500" height="200"></canvas>
+  <div id="info">スコア: <span id="score">0</span></div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const title = document.getElementById('title');
+  const startBtn = document.getElementById('start');
+
+  const W = canvas.width;
+  const H = canvas.height;
+  const groundY = H - 30;
+
+  let player, obstacles, score, speed, playing;
+  const MAX_JUMP = 2;
+
+  function init(){
+    player = { x:60, y:groundY, r:14, vy:0, jumping:false, jumpCount:0 };
+    obstacles = [];
+    score = 0;
+    speed = 3;
+    playing = true;
+    scoreEl.textContent = score;
+    loop();
+  }
+
+  function spawnObstacle(){
+    obstacles.push({ x:W+20, y:groundY, w:20, h:30 });
+  }
+
+  function update(){
+    // ジャンプ処理
+    if(player.jumping){
+      player.vy += 0.6;
+      player.y += player.vy;
+      if(player.y >= groundY){
+        player.y = groundY;
+        player.vy = 0;
+        player.jumping = false;
+        player.jumpCount = 0;
+      }
+    }
+
+    // 障害物
+    if(Math.random() < 0.02) spawnObstacle();
+    for(const o of obstacles){ o.x -= speed; }
+    obstacles = obstacles.filter(o => o.x + o.w > 0);
+
+    // 衝突判定
+    for(const o of obstacles){
+      if(o.x < player.x+player.r && o.x+o.w > player.x-player.r &&
+         o.y < player.y+player.r && o.y+o.h > player.y-player.r){
+        gameOver();
+      }
+    }
+
+    score++;
+    scoreEl.textContent = score;
+    if(score % 300 === 0) speed += 0.5;
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+
+    // 地面
+    ctx.strokeStyle = '#475569';
+    ctx.beginPath();
+    ctx.moveTo(0,groundY+player.r);
+    ctx.lineTo(W,groundY+player.r);
+    ctx.stroke();
+
+    // プレイヤー
+    ctx.fillStyle = '#34d399';
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.r, 0, Math.PI*2);
+    ctx.fill();
+
+    // 障害物
+    ctx.fillStyle = '#f97316';
+    for(const o of obstacles){ ctx.fillRect(o.x,o.y,o.w,o.h); }
+  }
+
+  function loop(){
+    if(!playing) return;
+    update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  function gameOver(){
+    playing = false;
+    title.innerHTML = `<h1>ゲームオーバー</h1><p>スコア: ${score}</p><button id=\"restart\">もう一度</button>`;
+    title.style.display = 'flex';
+    document.getElementById('restart').onclick = () => {
+      title.innerHTML = '<h1>タイミングジャンプゲーム</h1><p>スペースキーでジャンプ（2段ジャンプ可）</p><button id="start">ゲームスタート</button>';
+      document.getElementById('start').onclick = startGame;
+      title.style.display = 'none';
+      init();
+    };
+  }
+
+  function startGame(){
+    title.style.display = 'none';
+    init();
+  }
+
+  // 操作
+  window.addEventListener('keydown', e => {
+    if(!playing) return;
+    if(e.code === 'Space' && player.jumpCount < MAX_JUMP){
+      player.jumping = true;
+      player.vy = -10;
+      player.jumpCount++;
+    }
+  });
+
+  startBtn.onclick = startGame;
+})();
+</script>
+
+</body>
+</html>
