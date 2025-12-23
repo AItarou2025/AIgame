@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>スライドパズルゲーム</title>
+<style>
+body{
+  margin:0;
+  background:#0f1724;
+  color:#e6eef8;
+  font-family:system-ui;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:100vh;
+}
+#wrap{text-align:center}
+canvas{background:#061226;border:2px solid #1e293b;border-radius:12px}
+#info{margin-top:12px;font-size:18px}
+button{
+  margin-top:10px;
+  font-size:18px;
+  padding:8px 20px;
+  border-radius:10px;
+  border:2px solid #60a5fa;
+  background:#0b1220;
+  color:#fff;
+  cursor:pointer
+}
+</style>
+</head>
+<body>
+
+<div id="wrap">
+  <canvas id="c" width="360" height="360"></canvas>
+  <div id="info">クリックでタイルを動かそう</div>
+  <button id="reset">シャッフル</button>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const resetBtn = document.getElementById('reset');
+
+  const size = 3; // 3x3
+  const tileSize = canvas.width / size;
+  let tiles = [];
+
+  function init(){
+    tiles = [];
+    for(let i=0;i<size*size;i++) tiles.push(i);
+    shuffle();
+    draw();
+  }
+
+  function shuffle(){
+    for(let i=0;i<100;i++){
+      const empty = tiles.indexOf(0);
+      const x = empty % size;
+      const y = Math.floor(empty / size);
+      const moves = [];
+      if(x>0) moves.push(empty-1);
+      if(x<size-1) moves.push(empty+1);
+      if(y>0) moves.push(empty-size);
+      if(y<size-1) moves.push(empty+size);
+      const swap = moves[Math.floor(Math.random()*moves.length)];
+      [tiles[empty], tiles[swap]] = [tiles[swap], tiles[empty]];
+    }
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for(let i=0;i<tiles.length;i++){
+      if(tiles[i]===0) continue;
+      const x = (i % size) * tileSize;
+      const y = Math.floor(i / size) * tileSize;
+      ctx.fillStyle = '#60a5fa';
+      ctx.fillRect(x+4,y+4,tileSize-8,tileSize-8);
+      ctx.fillStyle = '#0f1724';
+      ctx.font = 'bold 48px system-ui';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(tiles[i], x+tileSize/2, y+tileSize/2);
+    }
+  }
+
+  function checkClear(){
+    for(let i=1;i<tiles.length;i++){
+      if(tiles[i-1]!==i) return false;
+    }
+    return true;
+  }
+
+  canvas.addEventListener('click', e => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const ix = Math.floor(mx / tileSize);
+    const iy = Math.floor(my / tileSize);
+    const idx = iy*size + ix;
+
+    const empty = tiles.indexOf(0);
+    const ex = empty % size;
+    const ey = Math.floor(empty / size);
+
+    if(Math.abs(ex-ix)+Math.abs(ey-iy)===1){
+      [tiles[empty], tiles[idx]] = [tiles[idx], tiles[empty]];
+      draw();
+      if(checkClear()){
+        setTimeout(()=>alert('ゲームクリア！'),100);
+      }
+    }
+  });
+
+  resetBtn.onclick = init;
+  init();
+})();
+</script>
+
+</body>
+</html>

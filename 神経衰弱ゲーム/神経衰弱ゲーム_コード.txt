@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>神経衰弱ゲーム</title>
+<style>
+body{
+  margin:0;
+  background:#0f1724;
+  color:#e6eef8;
+  font-family:system-ui;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:100vh;
+}
+#wrap{text-align:center}
+h1{margin-bottom:10px}
+#board{
+  display:grid;
+  grid-template-columns:repeat(4,80px);
+  grid-gap:12px;
+  justify-content:center;
+}
+.card{
+  width:80px;
+  height:100px;
+  background:#1e293b;
+  border-radius:12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:36px;
+  cursor:pointer;
+  user-select:none;
+}
+.card.open{background:#60a5fa;color:#0f1724}
+.card.matched{background:#22c55e;color:#0f1724;cursor:default}
+#info{margin-top:14px;font-size:18px}
+button{
+  margin-top:12px;
+  font-size:18px;
+  padding:8px 20px;
+  border-radius:10px;
+  border:2px solid #60a5fa;
+  background:#0b1220;
+  color:#fff;
+  cursor:pointer
+}
+</style>
+</head>
+<body>
+
+<div id="wrap">
+  <h1>神経衰弱</h1>
+  <div id="board"></div>
+  <div id="info">手数: <span id="moves">0</span></div>
+  <button id="reset">リスタート</button>
+</div>
+
+<script>
+(() => {
+  const board = document.getElementById('board');
+  const movesEl = document.getElementById('moves');
+  const resetBtn = document.getElementById('reset');
+
+  const symbols = ['🍎','🍌','🍇','🍒','🍋','🍉','🍍','🥝'];
+  let cards = [];
+  let first = null;
+  let lock = false;
+  let moves = 0;
+
+  function init(){
+    board.innerHTML = '';
+    cards = [];
+    moves = 0;
+    movesEl.textContent = moves;
+    first = null;
+    lock = false;
+
+    const deck = [...symbols, ...symbols]
+      .sort(() => Math.random() - 0.5);
+
+    deck.forEach(sym => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.textContent = '';
+      card.dataset.symbol = sym;
+      card.onclick = () => flip(card);
+      board.appendChild(card);
+      cards.push(card);
+    });
+  }
+
+  function flip(card){
+    if(lock || card.classList.contains('open') || card.classList.contains('matched')) return;
+
+    card.classList.add('open');
+    card.textContent = card.dataset.symbol;
+
+    if(!first){
+      first = card;
+    } else {
+      moves++;
+      movesEl.textContent = moves;
+      if(first.dataset.symbol === card.dataset.symbol){
+        first.classList.add('matched');
+        card.classList.add('matched');
+        first = null;
+        if(cards.every(c => c.classList.contains('matched'))){
+          setTimeout(()=>alert('ゲームクリア！'),300);
+        }
+      } else {
+        lock = true;
+        setTimeout(() => {
+          first.classList.remove('open');
+          card.classList.remove('open');
+          first.textContent = '';
+          card.textContent = '';
+          first = null;
+          lock = false;
+        }, 700);
+      }
+    }
+  }
+
+  resetBtn.onclick = init;
+  init();
+})();
+</script>
+
+</body>
+</html>
