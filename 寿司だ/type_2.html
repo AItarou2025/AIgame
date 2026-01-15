@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>寿司打っぽいタイピング</title>
+<style>
+body {
+  margin: 0;
+  font-family: sans-serif;
+  background: linear-gradient(#001, #112);
+  color: white;
+  text-align: center;
+}
+
+h1 { margin-top: 20px; }
+
+#menu, #game, #result {
+  display: none;
+}
+
+button {
+  font-size: 18px;
+  padding: 10px 20px;
+  margin: 10px;
+  cursor: pointer;
+}
+
+#lane {
+  position: relative;
+  overflow: hidden;
+  height: 120px;
+  background: #222;
+  border-top: 4px solid #444;
+  border-bottom: 4px solid #444;
+  margin: 20px;
+}
+
+.sushi {
+  position: absolute;
+  right: -200px;
+  top: 30px;
+  font-size: 32px;
+  white-space: nowrap;
+}
+
+#word {
+  font-size: 36px;
+  letter-spacing: 4px;
+}
+
+.typed {
+  color: #4caf50;
+}
+
+#info {
+  font-size: 18px;
+}
+</style>
+</head>
+<body>
+
+<h1>🍣 寿司打っぽいタイピング 🍣</h1>
+
+<div id="menu">
+  <h2>コース選択</h2>
+  <button onclick="start(3000,60)">3000円コース</button>
+  <button onclick="start(5000,60)">5000円コース</button>
+  <button onclick="start(10000,90)">10000円コース</button>
+</div>
+
+<div id="game">
+  <div id="info">
+    ⏱ <span id="time"></span>秒　
+    💰 <span id="money"></span>円
+  </div>
+
+  <div id="lane"></div>
+  <div id="word"></div>
+</div>
+
+<div id="result">
+  <h2>結果</h2>
+  <p>獲得金額：<span id="resultMoney"></span> 円</p>
+  <p>ハイスコア：<span id="high"></span> 円</p>
+  <button onclick="location.reload()">もう一度</button>
+</div>
+
+<script>
+const words = [
+  {jp:"まぐろ", roma:"maguro", price:300},
+  {jp:"サーモン", roma:"salmon", price:300},
+  {jp:"いくら", roma:"ikura", price:400},
+  {jp:"えび", roma:"ebi", price:200},
+  {jp:"うなぎ", roma:"unagi", price:500},
+  {jp:"たまご", roma:"tamago", price:200},
+  {jp:"ねぎとろ", roma:"negitoro", price:400},
+];
+
+let current;
+let index = 0;
+let money = 0;
+let time = 0;
+let timer;
+let playing = false;
+
+// 音
+const audio = new AudioContext();
+function beep(freq=400, len=0.05){
+  const o = audio.createOscillator();
+  const g = audio.createGain();
+  o.frequency.value = freq;
+  o.connect(g);
+  g.connect(audio.destination);
+  o.start();
+  g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + len);
+}
+
+const wordDiv = document.getElementById("word");
+const lane = document.getElementById("lane");
+
+function randomWord(){
+  current = words[Math.floor(Math.random()*words.length)];
+  index = 0;
+  renderWord();
+  spawnSushi();
+}
+
+function renderWord(){
+  let html = current.jp + "（";
+  for(let i=0;i<current.roma.length;i++){
+    html += i<index ? `<span class="typed">${current.roma[i]}</span>` : current.roma[i];
+  }
+  html += "）";
+  wordDiv.innerHTML = html;
+}
+
+function spawnSushi(){
+  const s = document.createElement("div");
+  s.className = "sushi";
+  s.textContent = "🍣 " + current.jp;
+  lane.appendChild(s);
+
+  let x = -200;
+  const move = setInterval(()=>{
+    x += 2;
+    s.style.right = x + "px";
+    if(x > window.innerWidth){
+      clearInterval(move);
+      s.remove();
+    }
+  },16);
+}
+
+document.addEventListener("keydown", e=>{
+  if(!playing) return;
+  if(e.key === current.roma[index]){
+    beep(600);
+    index++;
+    renderWord();
+    if(index === current.roma.length){
+      beep(900,0.1);
+      money += current.price;
+      randomWord();
+    }
+  } else {
+    beep(200);
+  }
+});
+
+function start(target, t){
+  document.getElementById("menu").style.display="none";
+  document.getElementById("game").style.display="block";
+
+  money = 0;
+  time = t;
+  playing = true;
+  document.getElementById("money").textContent = money;
+  document.getElementById("time").textContent = time;
+
+  randomWord();
+
+  timer = setInterval(()=>{
+    time--;
+    document.getElementById("time").textContent = time;
+    document.getElementById("money").textContent = money;
+
+    if(time<=0){
+      clearInterval(timer);
+      endGame();
+    }
+  },1000);
+}
+
+function endGame(){
+  playing = false;
+  document.getElementById("game").style.display="none";
+  document.getElementById("result").style.display="block";
+
+  document.getElementById("resultMoney").textContent = money;
+
+  const high = Math.max(money, localStorage.getItem("sushi_high")||0);
+  localStorage.setItem("sushi_high", high);
+  document.getElementById("high").textContent = high;
+}
+
+document.getElementById("menu").style.display="block";
+</script>
+
+</body>
+</html>

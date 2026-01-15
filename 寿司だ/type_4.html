@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>寿司打 市販レベル版</title>
+<style>
+body {
+  margin: 0;
+  background: #000;
+  color: #fff;
+  font-family: sans-serif;
+  text-align: center;
+}
+canvas {
+  display: block;
+  margin: auto;
+  background: linear-gradient(#001,#113);
+}
+button {
+  font-size: 18px;
+  padding: 10px 24px;
+  margin: 10px;
+  cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<h1>🍣 寿司打 市販レベル 🍣</h1>
+
+<div id="menu">
+  <button onclick="startGame('normal')">NORMAL</button>
+  <button onclick="startGame('hard')">HARD</button>
+</div>
+
+<div id="result" style="display:none;">
+  <h2 id="resultText"></h2>
+  <button onclick="retry()">リトライ</button>
+</div>
+
+<canvas id="game" width="900" height="420"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const WORDS = {
+  normal: [
+    {jp:"まぐろ", roma:"maguro", price:300},
+    {jp:"えび", roma:"ebi", price:200},
+    {jp:"いくら", roma:"ikura", price:400},
+  ],
+  hard: [
+    {jp:"しゃりおおもり", roma:"sharioomori", price:700},
+    {jp:"ちゃわんむし", roma:"chawanmushi", price:800},
+    {jp:"きょうりょく", roma:"kyouryoku", price:600},
+  ]
+};
+
+let state = "menu";
+let difficulty = "normal";
+
+let current;
+let index = 0;
+
+let sushiX = 900;
+let sushiY = 180;
+let sushiSpeed = 2;
+let falling = false;
+let fallSpeed = 0;
+
+let money = 0;
+let combo = 0;
+let multiplier = 1;
+
+let time = 60;
+let goal = 3000;
+let timerId = null;
+
+// ---------- ゲーム制御 ----------
+
+function startGame(diff){
+  difficulty = diff;
+  state = "play";
+  document.getElementById("menu").style.display = "none";
+  document.getElementById("result").style.display = "none";
+
+  money = 0;
+  combo = 0;
+  multiplier = 1;
+  time = 60;
+  goal = diff === "normal" ? 3000 : 5000;
+
+  nextWord();
+
+  clearInterval(timerId);
+  timerId = setInterval(()=>{
+    if(state !== "play") return;
+    time--;
+    if(time <= 0) endGame("timeup");
+  },1000);
+}
+
+function retry(){
+  state = "menu";
+  document.getElementById("menu").style.display = "block";
+  document.getElementById("result").style.display = "none";
+}
+
+function endGame(type){
+  state = type;
+  clearInterval(timerId);
+  document.getElementById("result").style.display = "block";
+  document.getElementById("resultText").textContent =
+    type === "clear" ? "🎉 CLEAR 🎉" : "⏱ TIME UP";
+}
+
+function nextWord(){
+  const list = WORDS[difficulty];
+  current = list[Math.floor(Math.random()*list.length)];
+  index = 0;
+  sushiX = 900;
+  sushiY = 180;
+  sushiSpeed = 2 + Math.random()*1.5;
+  falling = false;
+}
+
+// ---------- 入力 ----------
+
+document.addEventListener("keydown", e=>{
+  if(state !== "play" || falling) return;
+
+  if(e.key.toLowerCase() === current.roma[index]){
+    index++;
+    if(index === current.roma.length){
+      combo++;
+      multiplier = Math.min(3, 1 + Math.floor(combo / 3));
+      money += current.price * multiplier;
+
+      if(money >= goal){
+        endGame("clear");
+      } else {
+        nextWord();
+      }
+    }
+  } else {
+    combo = 0;
+    multiplier = 1;
+    falling = true;
+    fallSpeed = 4;
+  }
+});
+
+// ---------- 描画 ----------
+
+function update(){
+  ctx.clearRect(0,0,900,420);
+
+  if(state === "play"){
+    // UI
+    ctx.fillStyle = "#fff";
+    ctx.font = "20px sans-serif";
+    ctx.fillText(`💰 ${money}/${goal}`, 20, 30);
+    ctx.fillText(`🍥 COMBO ${combo} x${multiplier}`, 20, 60);
+    ctx.fillText(`⏱ ${time}`, 820, 30);
+
+    // 寿司移動
+    if(!falling){
+      sushiX -= sushiSpeed;
+      if(sushiX < -100){
+        nextWord();
+      }
+    } else {
+      sushiY += fallSpeed;
+      fallSpeed += 0.6;
+      if(sushiY > 450){
+        nextWord();
+      }
+    }
+
+    // 寿司描画
+    ctx.font = "42px sans-serif";
+    ctx.fillText("🍣", sushiX, sushiY);
+
+    // 単語
+    ctx.font = "26px monospace";
+    ctx.fillStyle = "#fff";
+    ctx.fillText(current.jp + " (", 260, 360);
+    for(let i=0;i<current.roma.length;i++){
+      ctx.fillStyle = i < index ? "#4caf50" : "#fff";
+      ctx.fillText(current.roma[i], 360 + i*16, 360);
+    }
+    ctx.fillText(")", 360 + current.roma.length*16, 360);
+  }
+
+  requestAnimationFrame(update);
+}
+
+update();
+</script>
+
+</body>
+</html>
+
+

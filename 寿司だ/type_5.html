@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>寿司打 市販最終版（ポーズ対応）</title>
+<style>
+body {
+  margin: 0;
+  background: #000;
+  color: #fff;
+  text-align: center;
+  font-family: sans-serif;
+}
+canvas {
+  display: block;
+  margin: auto;
+  background: linear-gradient(#001,#113);
+}
+button {
+  font-size: 18px;
+  padding: 10px 24px;
+  margin: 10px;
+  cursor: pointer;
+}
+#overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  background: rgba(0,0,0,0.7);
+  color: white;
+}
+#overlay div {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%,-50%);
+}
+</style>
+</head>
+<body>
+
+<h1>🍣 寿司打 市販最終版 🍣</h1>
+
+<div id="menu">
+  <button onclick="startGame('normal')">NORMAL</button>
+  <button onclick="startGame('hard')">HARD</button>
+</div>
+
+<div id="result" style="display:none;">
+  <h2 id="resultText"></h2>
+  <button onclick="retry()">リトライ</button>
+</div>
+
+<div id="overlay">
+  <div>
+    <h2>⏸ ポーズ</h2>
+    <button onclick="resume()">再開</button><br>
+    <button onclick="retry()">リトライ</button><br>
+    <button onclick="toMenu()">タイトルへ</button>
+  </div>
+</div>
+
+<canvas id="game" width="900" height="450"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+/* ===== ローマ字 ===== */
+const ROMA = {
+  "ち":["chi","ti"],
+  "ちゃ":["cha","cya","tya","tilya"],
+  "しゃ":["sha","sya"],
+  "し":["shi","si"],
+  "わ":["wa"],
+  "ん":["n","nn"],
+  "む":["mu"],
+  "きょ":["kyo","kilyo"],
+};
+
+/* ===== 単語 ===== */
+const WORDS = {
+  normal: [["ま","ぐ","ろ"],["え","び"],["い","く","ら"]],
+  hard: [["ちゃ","わ","ん","む","し"],["きょ","う","りょ","く"]],
+};
+
+let state = "menu";
+let difficulty = "normal";
+
+let kana=[], roma=[], kanaIndex=0, buffer="";
+
+let sushiX=900, sushiY=180, sushiSpeed=2;
+let falling=false, fallSpeed=0;
+
+let money=0, combo=0, multiplier=1;
+let time=60, goal=3000, timerId=null;
+
+/* ===== 共通 ===== */
+function buildRoma(k){ return k.map(x=>ROMA[x]||[x]); }
+
+/* ===== ゲーム制御 ===== */
+function startGame(diff){
+  difficulty=diff;
+  state="play";
+  menu.style.display="none";
+  result.style.display="none";
+  overlay.style.display="none";
+
+  money=combo=0; multiplier=1;
+  time=60; goal=diff==="normal"?3000:5000;
+  nextWord();
+
+  clearInterval(timerId);
+  timerId=setInterval(()=>{
+    if(state==="play"){
+      time--;
+      if(time<=0) endGame("timeup");
+    }
+  },1000);
+}
+
+function nextWord(){
+  kana = WORDS[difficulty][Math.floor(Math.random()*WORDS[difficulty].length)];
+  roma = buildRoma(kana);
+  kanaIndex=0; buffer="";
+  sushiX=900; sushiY=180;
+  sushiSpeed=2+Math.random()*1.5;
+  falling=false;
+}
+
+function endGame(type){
+  state=type;
+  clearInterval(timerId);
+  result.style.display="block";
+  resultText.textContent = type==="clear"?"🎉 CLEAR 🎉":"⏱ TIME UP";
+}
+
+function retry(){
+  startGame(difficulty);
+}
+
+function toMenu(){
+  state="menu";
+  clearInterval(timerId);
+  menu.style.display="block";
+  overlay.style.display="none";
+  result.style.display="none";
+}
+
+function resume(){
+  state="play";
+  overlay.style.display="none";
+}
+
+/* ===== 入力 ===== */
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape"){
+    if(state==="play"){ state="pause"; overlay.style.display="block"; }
+    else if(state==="pause"){ resume(); }
+    return;
+  }
+  if(state!=="play"||falling) return;
+
+  buffer+=e.key.toLowerCase();
+  for(const r of roma[kanaIndex]){
+    if(r.startsWith(buffer)){
+      if(r===buffer){
+        kanaIndex++; buffer="";
+        if(kanaIndex>=kana.length){
+          combo++; multiplier=Math.min(3,1+Math.floor(combo/3));
+          money+=300*multiplier;
+          if(money>=goal) endGame("clear");
+          else nextWord();
+        }
+      }
+      return;
+    }
+  }
+  buffer=""; combo=0; multiplier=1;
+  falling=true; fallSpeed=4;
+});
+
+/* ===== 描画 ===== */
+function update(){
+  ctx.clearRect(0,0,900,450);
+
+  if(state==="play"||state==="pause"){
+    ctx.fillStyle="#fff";
+    ctx.font="20px sans-serif";
+    ctx.fillText(`💰 ${money}/${goal}`,20,30);
+    ctx.fillText(`🍥 COMBO ${combo} x${multiplier}`,20,60);
+    ctx.fillText(`⏱ ${time}`,820,30);
+
+    if(state==="play"){
+      if(!falling){ sushiX-=sushiSpeed; if(sushiX<-100) nextWord();}
+      else{ sushiY+=fallSpeed; fallSpeed+=0.6; if(sushiY>480) nextWord();}
+    }
+
+    ctx.font="42px sans-serif";
+    ctx.fillText("🍣",sushiX,sushiY);
+
+    ctx.font="28px sans-serif";
+    ctx.fillText(kana.join(""),350,340);
+
+    ctx.font="24px monospace";
+    let x=350;
+    for(let i=0;i<roma.length;i++){
+      ctx.fillStyle=i<kanaIndex?"#4caf50":"#aaa";
+      ctx.fillText(roma[i][0],x,380);
+      x+=roma[i][0].length*14+10;
+    }
+  }
+  requestAnimationFrame(update);
+}
+update();
+</script>
+
+</body>
+</html>

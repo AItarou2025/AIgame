@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>寿司打 完全版（安定動作）</title>
+<style>
+body {
+  margin: 0;
+  background: #000;
+  color: #fff;
+  text-align: center;
+  font-family: sans-serif;
+}
+canvas {
+  background: linear-gradient(#001,#112);
+  display: block;
+  margin: auto;
+}
+button {
+  font-size: 18px;
+  padding: 10px 20px;
+  margin: 5px;
+}
+</style>
+</head>
+<body>
+
+<h1>🍣 寿司打 完全版 🍣</h1>
+
+<div id="menu">
+  <p>難易度</p>
+  <button onclick="startGame('normal')">NORMAL</button>
+  <button onclick="startGame('hard')">HARD</button>
+</div>
+
+<canvas id="game" width="800" height="400"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const NORMAL = [
+  {jp:"まぐろ", roma:"maguro", price:300},
+  {jp:"えび", roma:"ebi", price:200},
+  {jp:"いくら", roma:"ikura", price:400},
+];
+const HARD = [
+  {jp:"きょうりょく", roma:"kyouryoku", price:600},
+  {jp:"ちゃわんむし", roma:"chawanmushi", price:800},
+  {jp:"しゃりおおもり", roma:"sharioomori", price:700},
+];
+
+let words = [];
+let current = null;
+let index = 0;
+
+let money = 0;
+let combo = 0;
+let multiplier = 1;
+
+let time = 60;
+let goal = 3000;
+let playing = false;
+let cleared = false;
+
+let sushiY = 150;
+let falling = false;
+let fallSpeed = 0;
+let timerId = null;
+
+function randomWord(){
+  current = words[Math.floor(Math.random()*words.length)];
+  index = 0;
+  sushiY = 150;
+  falling = false;
+}
+
+function startGame(level){
+  document.getElementById("menu").style.display = "none";
+
+  words = level === "normal" ? NORMAL : HARD;
+  goal  = level === "normal" ? 3000 : 5000;
+
+  money = 0;
+  combo = 0;
+  multiplier = 1;
+  time = 60;
+  cleared = false;
+  playing = true;
+
+  randomWord();
+
+  if(timerId) clearInterval(timerId);
+  timerId = setInterval(()=>{
+    if(!playing) return;
+    time--;
+    if(time <= 0){
+      playing = false;
+    }
+  },1000);
+}
+
+document.addEventListener("keydown", e=>{
+  if(!playing || !current || falling) return;
+
+  if(e.key.toLowerCase() === current.roma[index]){
+    index++;
+    if(index === current.roma.length){
+      combo++;
+      multiplier = Math.min(3, 1 + Math.floor(combo / 3));
+      money += current.price * multiplier;
+
+      if(money >= goal){
+        cleared = true;
+        playing = false;
+      } else {
+        randomWord();
+      }
+    }
+  } else {
+    combo = 0;
+    multiplier = 1;
+    falling = true;
+    fallSpeed = 4;
+  }
+});
+
+function update(){
+  ctx.clearRect(0,0,800,400);
+
+  // UI
+  ctx.fillStyle = "white";
+  ctx.font = "20px sans-serif";
+  ctx.fillText(`💰 ${money} / ${goal}`, 20, 30);
+  ctx.fillText(`🍥 COMBO ${combo}  x${multiplier}`, 20, 60);
+  ctx.fillText(`⏱ ${time}`, 720, 30);
+
+  if(current){
+    // 寿司
+    ctx.font = "40px sans-serif";
+    ctx.fillText("🍣", 380, sushiY);
+
+    // 落下処理
+    if(falling){
+      sushiY += fallSpeed;
+      fallSpeed += 0.6;
+      if(sushiY > 420){
+        falling = false;
+        randomWord();
+      }
+    }
+
+    // 単語
+    ctx.font = "24px monospace";
+    let baseX = 300;
+    ctx.fillStyle = "#fff";
+    ctx.fillText(current.jp + " (", baseX - 80, 300);
+
+    for(let i=0;i<current.roma.length;i++){
+      ctx.fillStyle = i < index ? "#4caf50" : "#fff";
+      ctx.fillText(current.roma[i], baseX + i*14, 300);
+    }
+    ctx.fillStyle = "#fff";
+    ctx.fillText(")", baseX + current.roma.length*14, 300);
+  }
+
+  // 結果表示
+  if(cleared){
+    ctx.fillStyle = "yellow";
+    ctx.font = "48px sans-serif";
+    ctx.fillText("🎉 CLEAR 🎉", 250, 200);
+  } else if(!playing && time <= 0){
+    ctx.fillStyle = "red";
+    ctx.font = "42px sans-serif";
+    ctx.fillText("TIME UP", 290, 200);
+  }
+
+  requestAnimationFrame(update);
+}
+
+update();
+</script>
+
+</body>
+</html>
+
