@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>バカゲー10連発</title>
+<style>
+body {
+  font-family: sans-serif;
+  text-align: center;
+  background: #222;
+  color: white;
+}
+button {
+  font-size: 18px;
+  padding: 10px 20px;
+  margin: 5px;
+}
+#game {
+  margin-top: 30px;
+  font-size: 24px;
+}
+</style>
+</head>
+<body>
+
+<h1>🤪 バカゲー10連発</h1>
+
+<div>
+  <button onclick="game1()">① 押したら負け</button>
+  <button onclick="game2()">② 何もしないで勝ち</button>
+  <button onclick="game3()">③ 押すと爆死</button>
+  <button onclick="game4()">④ 勝手に負ける</button>
+  <button onclick="game5()">⑤ 説明が嘘</button><br>
+  <button onclick="game6()">⑥ 逃げるボタン</button>
+  <button onclick="game7()">⑦ 連打禁止</button>
+  <button onclick="game8()">⑧ 成功で失敗</button>
+  <button onclick="game9()">⑨ 時間が逆</button>
+  <button onclick="game10()">⑩ 押すほど難化</button>
+</div>
+
+<div id="game">ボタンを選べ</div>
+
+<script>
+const game = document.getElementById("game");
+
+/* ① 押したら負け */
+function game1() {
+  game.innerHTML = "<button onclick='lose()'>押すな</button>";
+}
+function lose() {
+  game.innerHTML = "❌ 押したな。負け。";
+}
+
+/* ② 何もしないで勝ち */
+function game2() {
+  game.innerHTML = "⏳ 5秒何もしないでください";
+  setTimeout(() => {
+    game.innerHTML = "🎉 勝ち！（何もしなかった）";
+  }, 5000);
+}
+
+/* ③ 押すと爆死 */
+function game3() {
+  game.innerHTML = "<button onclick='boom()'>安全ボタン</button>";
+}
+function boom() {
+  game.innerHTML = "💥 爆死";
+}
+
+/* ④ 勝手に負ける */
+function game4() {
+  game.innerHTML = "😈 開始";
+  setTimeout(() => {
+    game.innerHTML = "💀 理由はないが負け";
+  }, 2000);
+}
+
+/* ⑤ 説明が嘘 */
+function game5() {
+  game.innerHTML = "⬇ 下のボタンを押すと勝ち<br><button onclick='lie()'>押す</button>";
+}
+function lie() {
+  game.innerHTML = "❌ 嘘でした。負け。";
+}
+
+/* ⑥ 逃げるボタン */
+function game6() {
+  game.innerHTML = "<button id='run'>押せ</button>";
+  const btn = document.getElementById("run");
+  btn.onmouseover = () => {
+    btn.style.position = "absolute";
+    btn.style.left = Math.random() * 80 + "%";
+    btn.style.top = Math.random() * 80 + "%";
+  };
+}
+
+/* ⑦ 連打禁止 */
+let count = 0;
+function game7() {
+  count = 0;
+  game.innerHTML = "<button onclick='tap()'>1回だけ押せ</button>";
+}
+function tap() {
+  count++;
+  if (count > 1) {
+    game.innerHTML = "❌ 押しすぎ";
+  } else {
+    game.innerHTML = "⭕ 成功";
+  }
+}
+
+/* ⑧ 成功で失敗 */
+function game8() {
+  game.innerHTML = "<button onclick='success()'>成功</button>";
+}
+function success() {
+  game.innerHTML = "❌ 成功したので失敗";
+}
+
+/* ⑨ 時間が逆 */
+function game9() {
+  let t = 5;
+  game.innerHTML = t;
+  const timer = setInterval(() => {
+    t--;
+    game.innerHTML = t;
+    if (t === 0) {
+      clearInterval(timer);
+      game.innerHTML = "🔄 逆に負け";
+    }
+  }, 1000);
+}
+
+/* ⑩ 押すほど難化 */
+let level = 1;
+function game10() {
+  level = 1;
+  game.innerHTML = `<button onclick="hard()">Lv${level} 押せ</button>`;
+}
+function hard() {
+  level++;
+  if (level > 5) {
+    game.innerHTML = "💀 難しすぎて負け";
+  } else {
+    game.innerHTML = `<button onclick="hard()">Lv${level} 押せ</button>`;
+  }
+}
+</script>
+
+</body>
+</html>
