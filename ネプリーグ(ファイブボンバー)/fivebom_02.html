@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>5文字爆弾クイズ</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+:root {
+  --box: min(14vw, 60px);
+  --font: min(8vw, 36px);
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(#333, #000);
+  color: #fff;
+  font-family: system-ui, sans-serif;
+  text-align: center;
+}
+
+/* ---------- 共通 ---------- */
+button {
+  font-size: 20px;
+  padding: 12px 30px;
+  border-radius: 8px;
+  border: none;
+}
+
+.hidden { display: none; }
+
+/* ---------- タイトル ---------- */
+#title {
+  padding-top: 20vh;
+}
+
+#title h1 {
+  font-size: min(10vw, 40px);
+  color: red;
+}
+
+/* ---------- ゲーム ---------- */
+#theme {
+  font-size: min(6vw, 24px);
+  margin: 10px;
+}
+
+#bomb {
+  font-size: min(10vw, 40px);
+}
+
+.boxes {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 15px 0;
+}
+
+.box {
+  width: var(--box);
+  height: var(--box);
+  border: 3px solid white;
+  font-size: var(--font);
+  line-height: var(--box);
+  background: black;
+}
+
+input {
+  width: min(80vw, 300px);
+  font-size: 22px;
+  padding: 8px;
+  text-align: center;
+}
+
+.player-list {
+  margin-top: 15px;
+  font-size: 16px;
+}
+</style>
+</head>
+
+<body>
+
+<!-- タイトル画面 -->
+<div id="title">
+  <h1>💣 5文字爆弾クイズ 💣</h1>
+  <button onclick="startGame()">スタート</button>
+</div>
+
+<!-- ゲーム画面 -->
+<div id="game" class="hidden">
+  <div id="theme"></div>
+  <div id="bomb">💣 10</div>
+
+  <div class="boxes">
+    <div class="box"></div><div class="box"></div><div class="box"></div>
+    <div class="box"></div><div class="box"></div>
+  </div>
+
+  <input id="answer" maxlength="5" placeholder="5文字で入力"
+    inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off">
+
+  <br>
+  <button onclick="checkPlayer()">決定</button>
+
+  <div class="player-list" id="status"></div>
+</div>
+
+<script>
+/* ---------- 問題データ ---------- */
+const quizData = {
+  果物:["りんごあめ","ばななみ","ぶどうえ","めろんぱ","ももたろ"],
+  動物:["あらいぐ","らいおん","しまうま","きりんさ","こあらん"],
+  食べ物:["おむらい","たこやき","らーめん","かれーら","すしろう"],
+  国名:["にほんこ","あめりか","ふらんす","どいつご","いぎりす"],
+  日本地名:["とうきょ","おおさか","なごやし","ふくおか","さっぽ"]
+};
+
+/* ---------- 変数 ---------- */
+let question;
+let usedAnswers = [];
+let cpuAnswers = [];
+let timer;
+let time = 10;
+
+/* ---------- スタート ---------- */
+function startGame() {
+  document.getElementById("title").classList.add("hidden");
+  document.getElementById("game").classList.remove("hidden");
+
+  setupQuestion();
+  startTimer();
+  startCPUThinking();
+}
+
+/* ---------- 問題生成 ---------- */
+function setupQuestion() {
+  const genre = Object.keys(quizData)
+    [Math.floor(Math.random()*Object.keys(quizData).length)];
+
+  const answers = [...quizData[genre]];
+  answers.sort(() => Math.random() - 0.5);
+
+  question = answers[0];
+  cpuAnswers = answers.slice(1,5); // CPU4人、かぶりなし
+  usedAnswers = [];
+
+  document.getElementById("theme").textContent = "お題：" + genre;
+  document.getElementById("status").textContent =
+    "CPU待機中…（4人）";
+}
+
+/* ---------- プレイヤー入力（IME対策） ---------- */
+const boxes = document.querySelectorAll(".box");
+const input = document.getElementById("answer");
+
+input.addEventListener("keyup", () => {
+  boxes.forEach((b,i)=>b.textContent=input.value[i]||"");
+});
+
+/* ---------- タイマー ---------- */
+function startTimer() {
+  time = 10;
+  const bomb = document.getElementById("bomb");
+
+  timer = setInterval(() => {
+    time--;
+    bomb.textContent = "💣 " + time;
+    if (time <= 0) explode("時間切れ！");
+  }, 1000);
+}
+
+/* ---------- プレイヤー判定 ---------- */
+function checkPlayer() {
+  if (input.value === question) {
+    clearInterval(timer);
+    document.getElementById("status").textContent = "あなた：正解！";
+  } else {
+    explode("あなた不正解！");
+  }
+}
+
+/* ---------- CPU思考 ---------- */
+function startCPUThinking() {
+  cpuAnswers.forEach((ans, i) => {
+    const thinkTime = 2500 + Math.random() * 3500; // 人間らしい間
+    setTimeout(() => {
+      usedAnswers.push(ans);
+      document.getElementById("status").textContent =
+        `CPU${usedAnswers.length}人 正解済み`;
+    }, thinkTime);
+  });
+}
+
+/* ---------- 爆発 ---------- */
+function explode(msg) {
+  clearInterval(timer);
+  document.getElementById("bomb").textContent = "💥 BOOM!!";
+  document.getElementById("status").textContent = msg;
+  input.disabled = true;
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>5文字爆弾クイズ</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+:root {
+  --box-size: min(14vw, 60px);
+  --font-size: min(8vw, 36px);
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(#333, #000);
+  color: #fff;
+  font-family: system-ui, sans-serif;
+  text-align: center;
+}
+
+h1 {
+  color: red;
+  font-size: min(8vw, 32px);
+  margin: 12px 0;
+}
+
+#theme {
+  font-size: min(6vw, 24px);
+  margin: 10px 0;
+}
+
+#bomb {
+  font-size: min(10vw, 40px);
+  margin: 10px 0;
+}
+
+.boxes {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.box {
+  width: var(--box-size);
+  height: var(--box-size);
+  border: 3px solid white;
+  font-size: var(--font-size);
+  line-height: var(--box-size);
+  background: black;
+}
+
+input {
+  width: min(80vw, 300px);
+  font-size: 22px;
+  padding: 8px;
+  text-align: center;
+  border-radius: 6px;
+  border: none;
+}
+
+button {
+  font-size: 20px;
+  margin: 14px;
+  padding: 10px 28px;
+  border-radius: 8px;
+  border: none;
+}
+
+#result {
+  font-size: min(6vw, 24px);
+  margin-bottom: 20px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>💣 5文字爆弾クイズ 💣</h1>
+<div id="theme"></div>
+<div id="bomb">💣 10</div>
+
+<div class="boxes">
+  <div class="box"></div>
+  <div class="box"></div>
+  <div class="box"></div>
+  <div class="box"></div>
+  <div class="box"></div>
+</div>
+
+<input
+  id="answer"
+  maxlength="5"
+  inputmode="text"
+  autocomplete="off"
+  autocorrect="off"
+  autocapitalize="off"
+  placeholder="5文字で入力"
+>
+
+<br>
+<button onclick="check()">決定</button>
+<div id="result"></div>
+
+<script>
+const quizData = {
+  果物:["りんごあめ","ばななみ","ぶどうえ","めろんぱ","ももたろ"],
+  動物:["あらいぐ","らいおん","しまうま","きりんさ","こあらん"],
+  食べ物:["おむらい","たこやき","らーめん","かれーら","すしろう"],
+  野菜:["にんじん","ぶろっこ","きゃべつ","たまねぎ","れたすや"],
+  国名:["にほんこ","あめりか","ふらんす","どいつご","いぎりす"],
+  日本地名:["とうきょ","おおさか","なごやし","ふくおか","さっぽ"],
+  スポーツ:["やきゅう","さっか","てにす","すいえ","らぐび"],
+  色:["あかいろ","あおいろ","きいろ","みどり","くろいろ"],
+  職業:["いしゃさ","けいさ","しょうぼ","せんせ","うんて"],
+  乗り物:["じてんし","でんしゃ","ひこうき","くるまや","ふねだ"]
+};
+
+// 全問題を1配列へ
+let questions = [];
+for (let g in quizData) {
+  quizData[g].forEach(a => questions.push({theme:g, answer:a}));
+}
+questions.sort(() => Math.random() - 0.5);
+
+let current = questions.pop();
+document.getElementById("theme").textContent = "お題：" + current.theme;
+
+const boxes = document.querySelectorAll(".box");
+const input = document.getElementById("answer");
+
+input.addEventListener("input", () => {
+  boxes.forEach((b,i)=>b.textContent=input.value[i]||"");
+});
+
+let time = 10;
+const bomb = document.getElementById("bomb");
+
+const timer = setInterval(() => {
+  time--;
+  bomb.textContent = "💣 " + time;
+  if (time <= 0) explode();
+}, 1000);
+
+function check() {
+  if (input.value === current.answer) {
+    clearInterval(timer);
+    bomb.textContent = "🟢 SAFE";
+    document.getElementById("result").textContent = "正解！";
+  } else explode();
+}
+
+function explode() {
+  clearInterval(timer);
+  bomb.textContent = "💥 BOOM!!";
+  document.getElementById("result").textContent = "爆発！";
+  input.disabled = true;
+}
+</script>
+
+</body>
+</html>
