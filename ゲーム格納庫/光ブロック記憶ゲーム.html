@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>記憶スロット</title>
+<style>
+    body {
+        font-family: sans-serif;
+        text-align: center;
+        background: #111;
+        color: #fff;
+    }
+    h1 {
+        margin-top: 20px;
+    }
+    #grid {
+        display: grid;
+        grid-template-columns: repeat(3, 100px);
+        gap: 10px;
+        justify-content: center;
+        margin: 30px auto;
+    }
+    .cell {
+        width: 100px;
+        height: 100px;
+        background: #333;
+        cursor: pointer;
+        border-radius: 10px;
+    }
+    .cell.active {
+        background: yellow;
+    }
+    .cell.selected {
+        background: #4caf50;
+    }
+    button {
+        font-size: 18px;
+        padding: 10px 20px;
+    }
+</style>
+</head>
+<body>
+
+<h1>記憶スロット</h1>
+<p id="info">スタートを押してください</p>
+
+<div id="grid"></div>
+
+<button onclick="startGame()">スタート</button>
+
+<script>
+const grid = document.getElementById("grid");
+const info = document.getElementById("info");
+
+let answer = [];
+let selected = [];
+let canSelect = false;
+
+// マス生成
+for (let i = 0; i < 9; i++) {
+    const cell = document.createElement("div");
+    cell.className = "cell";
+    cell.dataset.index = i;
+    cell.onclick = () => clickCell(i);
+    grid.appendChild(cell);
+}
+
+function startGame() {
+    answer = [];
+    selected = [];
+    canSelect = false;
+    info.textContent = "覚えてください…";
+
+    const cells = document.querySelectorAll(".cell");
+    cells.forEach(c => {
+        c.classList.remove("active", "selected");
+    });
+
+    // ランダムに3マス選ぶ
+    while (answer.length < 3) {
+        const r = Math.floor(Math.random() * 9);
+        if (!answer.includes(r)) answer.push(r);
+    }
+
+    // 表示
+    answer.forEach(i => {
+        cells[i].classList.add("active");
+    });
+
+    // 一瞬後に消す
+    setTimeout(() => {
+        answer.forEach(i => {
+            cells[i].classList.remove("active");
+        });
+        canSelect = true;
+        info.textContent = "同じマスをクリック！";
+    }, 1000);
+}
+
+function clickCell(i) {
+    if (!canSelect) return;
+    if (selected.includes(i)) return;
+
+    selected.push(i);
+    document.querySelectorAll(".cell")[i].classList.add("selected");
+
+    if (selected.length === answer.length) {
+        checkResult();
+    }
+}
+
+function checkResult() {
+    canSelect = false;
+
+    const ok =
+        selected.every(i => answer.includes(i)) &&
+        answer.every(i => selected.includes(i));
+
+    if (ok) {
+        info.textContent = "🎉 正解！";
+    } else {
+        info.textContent = "❌ 不正解…";
+        // 正解を再表示
+        const cells = document.querySelectorAll(".cell");
+        answer.forEach(i => cells[i].classList.add("active"));
+    }
+}
+</script>
+
+</body>
+</html>
