@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>10回以内で当てろ！</title>
+<style>
+    body {
+        font-family: sans-serif;
+        text-align: center;
+        background: #222;
+        color: #fff;
+    }
+    h1 {
+        margin-top: 30px;
+    }
+    input, button {
+        font-size: 20px;
+        padding: 10px;
+        margin: 10px;
+    }
+    #log {
+        margin-top: 20px;
+        font-size: 18px;
+    }
+</style>
+</head>
+<body>
+
+<h1>10回以内で当てろ！</h1>
+<p>1〜100の数字を当ててください</p>
+<p>残り回数：<span id="remain">10</span></p>
+
+<input type="number" id="guess" min="1" max="100">
+<button onclick="check()">決定</button>
+
+<div id="log"></div>
+
+<button onclick="resetGame()">リスタート</button>
+
+<script>
+let answer;
+let count;
+
+function resetGame() {
+    answer = Math.floor(Math.random() * 100) + 1;
+    count = 10;
+    document.getElementById("remain").textContent = count;
+    document.getElementById("log").innerHTML = "";
+    document.getElementById("guess").value = "";
+}
+
+function check() {
+    if (count <= 0) return;
+
+    const num = Number(document.getElementById("guess").value);
+    if (!num || num < 1 || num > 100) return;
+
+    count--;
+    document.getElementById("remain").textContent = count;
+
+    let msg = `▶ ${num} → `;
+
+    if (num === answer) {
+        msg += "🎉 正解！";
+        document.getElementById("log").innerHTML += msg + "<br>";
+        alert("クリア！");
+        count = 0;
+        return;
+    } else if (num < answer) {
+        msg += "もっと大きい";
+    } else {
+        msg += "もっと小さい";
+    }
+
+    document.getElementById("log").innerHTML += msg + "<br>";
+
+    if (count === 0) {
+        alert(`ゲームオーバー… 正解は ${answer}`);
+    }
+}
+
+resetGame();
+</script>
+
+</body>
+</html>
