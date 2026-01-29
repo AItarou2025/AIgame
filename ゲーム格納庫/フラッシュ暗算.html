@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>フラッシュ暗算ゲーム</title>
+<style>
+    body {
+        font-family: sans-serif;
+        text-align: center;
+        background: #111;
+        color: #fff;
+    }
+    #number {
+        font-size: 80px;
+        margin: 40px;
+        height: 100px;
+    }
+    input, button {
+        font-size: 20px;
+        padding: 10px;
+        margin: 10px;
+    }
+</style>
+</head>
+<body>
+
+<h1>フラッシュ暗算</h1>
+
+<div id="number"></div>
+
+<button onclick="startGame()">スタート</button>
+
+<div id="inputArea" style="display:none;">
+    <input type="number" id="answer" placeholder="答えを入力">
+    <button onclick="checkAnswer()">決定</button>
+</div>
+
+<p id="result"></p>
+
+<script>
+let numbers = [];
+let index = 0;
+let total = 0;
+
+// 設定（ここを変えると難易度調整できる）
+const FLASH_COUNT = 5;   // 表示する数字の数
+const FLASH_TIME = 700; // 表示時間(ms)
+
+function startGame() {
+    numbers = [];
+    index = 0;
+    total = 0;
+    document.getElementById("result").textContent = "";
+    document.getElementById("inputArea").style.display = "none";
+    document.getElementById("answer").value = "";
+
+    for (let i = 0; i < FLASH_COUNT; i++) {
+        numbers.push(Math.floor(Math.random() * 9) + 1);
+    }
+
+    flash();
+}
+
+function flash() {
+    if (index < numbers.length) {
+        document.getElementById("number").textContent = numbers[index];
+        total += numbers[index];
+        index++;
+
+        setTimeout(() => {
+            document.getElementById("number").textContent = "";
+            setTimeout(flash, 200);
+        }, FLASH_TIME);
+    } else {
+        document.getElementById("number").textContent = "？";
+        document.getElementById("inputArea").style.display = "block";
+    }
+}
+
+function checkAnswer() {
+    const ans = Number(document.getElementById("answer").value);
+    if (ans === total) {
+        document.getElementById("result").textContent = "🎉 正解！";
+    } else {
+        document.getElementById("result").textContent =
+            `❌ 不正解… 正解は ${total}`;
+    }
+}
+</script>
+
+</body>
+</html>
