@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>MSCクイズ</title>
+<style>
+  body { font-family: Arial, sans-serif; text-align: center; background-color: #ffffff; color: #333; }
+  #quiz, #miniGame, #result, #timerCircle { display: none; }
+  #timerCircle {
+    margin: 20px auto;
+    width: 100px; height: 100px;
+    border: 5px solid #555;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: bold;
+    background-color: #f9f9f9;
+  }
+  button {
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    padding: 8px 16px;
+    margin: 5px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  button:hover { background-color: #e0e0e0; }
+  canvas { border:1px solid #ccc; margin: 20px auto; display: block; background-color: #fff; }
+</style>
+</head>
+<body>
+  <h1>MSCクイズ</h1>
+
+  <div id="quiz">
+    <h2 id="question"></h2>
+    <div id="options"></div>
+    <div id="timerCircle"><span id="time"></span></div>
+  </div>
+
+  <div id="miniGame">
+    <h2>ミニゲーム</h2>
+    <canvas id="gameCanvas" width="300" height="300"></canvas>
+    <button id="stopButton">ストップ</button>
+    <p id="miniResult"></p>
+  </div>
+
+  <div id="result">
+    <h2>結果発表</h2>
+    <p id="finalScore"></p>
+  </div>
+
+<script>
+let currentQuestion = 0;
+let score = 0;
+let timeLeft = 30;
+let timerInterval;
+let useMSC = false;
+let gameRunning = false;
+let animId;
+let cursorPos, direction, targetPos, gameType;
+let stopPressed = false;
+
+const questions = [
+  { q: "宮崎県ソフトウェアセンターはどの年に設立された？", opts: ["1991年","2000年","2010年"], ans: 0 },
+  { q: "宮崎県ソフトウェアセンターの主な事業は？", opts: ["農業","IT支援","観光"], ans: 1 },
+  { q: "宮崎県ソフトウェアセンターの略称は？", opts: ["MSC","MSS","MSP"], ans: 0 },
+  { q: "MSCが提供するサービスは？", opts: ["ソフトウェア開発支援","漁業支援","教育以外全般"], ans: 0 },
+  { q: "MSCの所在地はどこ？", opts: ["宮崎市","延岡市","都城市"], ans: 0 },
+  { q: "MSCが力を入れている分野は？", opts: ["AI・クラウド","林業","観光"], ans: 0 },
+  { q: "MSCの設立目的は？", opts: ["地域のIT産業育成","観光推進","漁業支援"], ans: 0 },
+  { q: "MSCの施設内にあるものは？", opts: ["データセンター","遊園地","漁港"], ans: 0 },
+  { q: "MSCのパートナーは？", opts: ["IT企業・大学","漁協","農家"], ans: 0 },
+  { q: "MSCが開催するイベントは？", opts: ["ITセミナー","祭り","マラソン"], ans: 0 }
+];
+
+function startQuiz() {
+  document.getElementById("quiz").style.display = "block";
+  showQuestion();
+}
+
+function showQuestion() {
+  // ★前の動作を確実に停止
+  if (animId) cancelAnimationFrame(animId);
+  clearInterval(timerInterval);
+
+  // ★ここが修正ポイント：クイズ画面を再表示
+  document.getElementById("quiz").style.display = "block";
+
+  if (currentQuestion >= questions.length) return endGame();
+
+  const q = questions[currentQuestion];
+  let qText = q.q;
+  if (useMSC && qText.includes("宮崎県ソフトウェアセンター")) {
+    qText = qText.replace(/宮崎県ソフトウェアセンター/g, "MSC");
+  }
+  document.getElementById("question").textContent = qText;
+
+  const optsDiv = document.getElementById("options");
+  optsDiv.innerHTML = "";
+  q.opts.forEach((opt, i) => {
+    const btn = document.createElement("button");
+    btn.textContent = opt;
+    btn.onclick = () => checkAnswer(i);
+    optsDiv.appendChild(btn);
+  });
+
+  timeLeft = 30;
+  document.getElementById("time").textContent = timeLeft;
+  document.getElementById("timerCircle").style.display = "flex";
+
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    document.getElementById("time").textContent = timeLeft;
+    if (timeLeft <= 0) {
+      clearInterval(timerInterval);
+      score -= 10;
+      nextQuestion();
+    }
+  }, 1000);
+}
+
+function checkAnswer(choice) {
+  clearInterval(timerInterval);
+  document.getElementById("quiz").style.display = "none";
+
+  if (choice === questions[currentQuestion].ans) {
+    if (questions[currentQuestion].q.includes("略称")) useMSC = true;
+    startMiniGame(true);
+  } else {
+    score -= 10;
+    currentQuestion++;
+    showQuestion();
+  }
+}
+
+function startMiniGame(correct) {
+  document.getElementById("miniGame").style.display = "block";
+  document.getElementById("miniResult").textContent = "";
+
+  cursorPos = 0;
+  direction = 1;
+  gameType = currentQuestion % 3;
+  targetPos = Math.random();
+  stopPressed = false;
+  gameRunning = true;
+
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
+
+  function draw() {
+    ctx.clearRect(0,0,300,300);
+    ctx.strokeStyle = "#333";
+    ctx.lineWidth = 2;
+
+    if(gameType===0){
+      ctx.beginPath(); ctx.moveTo(50,150); ctx.lineTo(250,150); ctx.stroke();
+      ctx.fillStyle="green"; ctx.beginPath(); ctx.arc(50+200*targetPos,150,10,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle="red"; ctx.beginPath(); ctx.arc(50+200*cursorPos,150,5,0,Math.PI*2); ctx.fill();
+    }
+    else if(gameType===1){
+      ctx.beginPath(); ctx.arc(150,150,100,0,Math.PI*2); ctx.stroke();
+      let angle = 2*Math.PI*cursorPos;
+      let tAngle = 2*Math.PI*targetPos;
+      ctx.fillStyle="green"; ctx.beginPath(); ctx.arc(150+100*Math.cos(tAngle),150+100*Math.sin(tAngle),10,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle="red"; ctx.beginPath(); ctx.arc(150+100*Math.cos(angle),150+100*Math.sin(angle),5,0,Math.PI*2); ctx.fill();
+    }
+    else {
+      const points=[[150,50],[250,250],[50,250]];
+      ctx.beginPath(); ctx.moveTo(...points[0]); ctx.lineTo(...points[1]); ctx.lineTo(...points[2]); ctx.closePath(); ctx.stroke();
+      let pos=getTri(points,600*cursorPos);
+      let tPos=getTri(points,600*targetPos);
+      ctx.fillStyle="green"; ctx.beginPath(); ctx.arc(tPos[0],tPos[1],10,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle="red"; ctx.beginPath(); ctx.arc(pos[0],pos[1],5,0,Math.PI*2); ctx.fill();
+    }
+  }
+
+  function animate() {
+    if (!gameRunning) return;
+    draw();
+    cursorPos += 0.02 * direction; // ★おすすめ難易度
+    if(cursorPos >= 1) direction = -1;
+    if(cursorPos <= 0) direction = 1;
+    animId = requestAnimationFrame(animate);
+  }
+  animate();
+
+  document.getElementById("stopButton").onclick = () => stopGame(correct);
+}
+
+function getTri(p,d){
+  const e=[[p[0],p[1]],[p[1],p[2]],[p[2],p[0]]];
+  const L=e.map(v=>Math.hypot(v[1][0]-v[0][0],v[1][1]-v[0][1]));
+  d%=L.reduce((a,b)=>a+b);
+  for(let i=0;i<3;i++){
+    if(d<=L[i]) return [
+      e[i][0][0]+(e[i][1][0]-e[i][0][0])*(d/L[i]),
+      e[i][0][1]+(e[i][1][1]-e[i][0][1])*(d/L[i])
+    ];
+    d-=L[i];
+  }
+  return p[0];
+}
+
+function stopGame(correct){
+  if(!gameRunning || stopPressed) return;
+  stopPressed=true;
+  gameRunning=false;
+  cancelAnimationFrame(animId);
+
+  let success=Math.abs(cursorPos-targetPos)<0.04; // ★盛り上がる判定幅
+
+  if(correct) score += success ? 10 : 5;
+  else score -= 10;
+
+  document.getElementById("miniResult").textContent =
+    success ? "成功！ +10点" : (correct ? "失敗… +5点" : "不正解 -10点");
+
+  setTimeout(()=>{
+    document.getElementById("miniGame").style.display="none";
+    currentQuestion++;
+    showQuestion();
+  },1000);
+}
+
+function nextQuestion(){
+  document.getElementById("quiz").style.display="none";
+  currentQuestion++;
+  showQuestion();
+}
+
+function endGame(){
+  document.getElementById("quiz").style.display="none";
+  document.getElementById("miniGame").style.display="none";
+  document.getElementById("result").style.display="block";
+  document.getElementById("finalScore").textContent = `あなたの得点: ${score}`;
+}
+
+startQuiz();
+</script>
+</body>
+</html>

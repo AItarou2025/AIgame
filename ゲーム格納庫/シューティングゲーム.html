@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>ドット絵シューティング</title>
+<style>
+body {
+  margin: 0;
+  background: black;
+  overflow: hidden;
+  font-family: monospace;
+  color: white;
+}
+
+#game {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  image-rendering: pixelated;
+}
+
+.player, .enemy, .bullet {
+  position: absolute;
+  image-rendering: pixelated;
+}
+
+/* 自機（ドット戦闘機風） */
+.player {
+  width: 24px;
+  height: 16px;
+  background: cyan;
+  left: 40px;
+}
+
+/* 敵機 */
+.enemy {
+  width: 20px;
+  height: 14px;
+  background: red;
+}
+
+/* 弾 */
+.bullet {
+  width: 6px;
+  height: 2px;
+  background: yellow;
+}
+
+#ui {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-size: 14px;
+}
+</style>
+</head>
+<body>
+
+<div id="game">
+  <div id="ui">
+    SCORE: <span id="score">0</span>
+    &nbsp; HP: <span id="hp">3</span>
+  </div>
+  <div id="player" class="player"></div>
+</div>
+
+<script>
+const game = document.getElementById("game");
+const player = document.getElementById("player");
+const scoreEl = document.getElementById("score");
+const hpEl = document.getElementById("hp");
+
+let playerY = window.innerHeight / 2;
+let bullets = [];
+let enemies = [];
+let keys = {};
+let score = 0;
+let hp = 3;
+let gameOver = false;
+
+// キー入力
+document.addEventListener("keydown", e => {
+  keys[e.key] = true;
+  if (e.key === " ") shoot();
+});
+document.addEventListener("keyup", e => keys[e.key] = false);
+
+// 弾発射
+function shoot() {
+  if (gameOver) return;
+
+  const b = document.createElement("div");
+  b.className = "bullet";
+  b.x = 70;
+  b.y = playerY + 7;
+
+  b.style.left = b.x + "px";
+  b.style.top = b.y + "px";
+
+  game.appendChild(b);
+  bullets.push(b);
+}
+
+// 敵編隊生成（V字）
+function spawnFormation() {
+  if (gameOver) return;
+
+  const baseY = Math.random() * (window.innerHeight - 100) + 40;
+
+  const offsets = [
+    {x:0, y:0},
+    {x:20, y:-15},
+    {x:20, y:15},
+    {x:40, y:-30},
+    {x:40, y:30}
+  ];
+
+  offsets.forEach(o => {
+    const e = document.createElement("div");
+    e.className = "enemy";
+    e.x = window.innerWidth + o.x;
+    e.y = baseY + o.y;
+
+    e.style.left = e.x + "px";
+    e.style.top = e.y + "px";
+
+    game.appendChild(e);
+    enemies.push(e);
+  });
+}
+
+// 当たり判定
+function hit(a, b) {
+  return !(
+    a.x > b.x + b.offsetWidth ||
+    a.x + a.offsetWidth < b.x ||
+    a.y > b.y + b.offsetHeight ||
+    a.y + a.offsetHeight < b.y
+  );
+}
+
+// メインループ
+function update() {
+  if (gameOver) return;
+
+  // 自機移動
+  if (keys["ArrowUp"] || keys["w"]) playerY -= 4;
+  if (keys["ArrowDown"] || keys["s"]) playerY += 4;
+
+  playerY = Math.max(0, Math.min(window.innerHeight - 16, playerY));
+  player.style.top = playerY + "px";
+
+  // 弾更新
+  bullets.forEach((b, i) => {
+    b.x += 8;
+    b.style.left = b.x + "px";
+    if (b.x > window.innerWidth) {
+      b.remove();
+      bullets.splice(i, 1);
+    }
+  });
+
+  // 敵更新
+  enemies.forEach((e, i) => {
+    e.x -= 2;
+    e.style.left = e.x + "px";
+
+    // 自機衝突
+    if (hit(
+      {x:40, y:playerY, offsetWidth:24, offsetHeight:16},
+      e
+    )) {
+      e.remove();
+      enemies.splice(i, 1);
+      hp--;
+      hpEl.textContent = hp;
+      if (hp <= 0) endGame();
+    }
+
+    // 弾衝突
+    bullets.forEach((b, bi) => {
+      if (hit(b, e)) {
+        e.remove();
+        b.remove();
+        enemies.splice(i, 1);
+        bullets.splice(bi, 1);
+        score += 100;
+        scoreEl.textContent = score;
+      }
+    });
+
+    if (e.x < -30) {
+      e.remove();
+      enemies.splice(i, 1);
+    }
+  });
+
+  requestAnimationFrame(update);
+}
+
+function endGame() {
+  gameOver = true;
+  alert("GAME OVER\nSCORE: " + score);
+}
+
+setInterval(spawnFormation, 2000);
+update();
+</script>
+
+</body>
+</html>

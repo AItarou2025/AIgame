@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>漢字トロッコ（読み方）</title>
+<style>
+body {
+    background: #222;
+    color: #fff;
+    font-family: sans-serif;
+    text-align: center;
+}
+
+#game {
+    width: 500px;
+    margin: 40px auto;
+    padding: 20px;
+    border: 3px solid #fff;
+    background: #333;
+}
+
+#kanji {
+    font-size: 48px;
+    margin: 20px 0;
+}
+
+input {
+    font-size: 24px;
+    padding: 5px;
+    width: 250px;
+    text-align: center;
+}
+
+#bar {
+    height: 20px;
+    background: red;
+    margin-top: 20px;
+    width: 100%;
+}
+
+#message {
+    margin-top: 15px;
+    font-size: 20px;
+}
+</style>
+</head>
+<body>
+
+<h1>🚋 漢字トロッコ</h1>
+
+<div id="game">
+    <div>この漢字の読みは？</div>
+    <div id="kanji">漢字</div>
+    <input id="answer" placeholder="ひらがなで入力">
+    <div id="bar"></div>
+    <div id="message"></div>
+</div>
+
+<script>
+const questions = [
+    { kanji: "冒険", yomi: "ぼうけん" },
+    { kanji: "知識", yomi: "ちしき" },
+    { kanji: "英雄", yomi: "えいゆう" },
+    { kanji: "対決", yomi: "たいけつ" },
+    { kanji: "感激", yomi: "かんげき" }
+];
+
+let index = 0;
+let time = 100;
+let speed = 0.6;
+let timer;
+
+const kanji = document.getElementById("kanji");
+const answer = document.getElementById("answer");
+const bar = document.getElementById("bar");
+const message = document.getElementById("message");
+
+function start() {
+    showQuestion();
+    timer = setInterval(update, 50);
+}
+
+function showQuestion() {
+    kanji.textContent = questions[index].kanji;
+    answer.value = "";
+    time = 100;
+    bar.style.width = "100%";
+}
+
+function update() {
+    time -= speed;
+    bar.style.width = time + "%";
+    if (time <= 0) {
+        gameOver("時間切れ！");
+    }
+}
+
+answer.addEventListener("keydown", e => {
+    if (e.key === "Enter") {
+        const input = answer.value.trim();
+        if (input === questions[index].yomi) {
+            index++;
+            speed += 0.2;
+            if (index >= questions.length) {
+                clearInterval(timer);
+                message.textContent = "🎉 全問クリア！";
+            } else {
+                showQuestion();
+            }
+        } else {
+            gameOver("不正解！");
+        }
+    }
+});
+
+function gameOver(text) {
+    clearInterval(timer);
+    message.textContent = "💥 ゲームオーバー：" + text;
+    answer.disabled = true;
+}
+
+start();
+</script>
+
+</body>
+</html>
