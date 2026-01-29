@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>どうぶつタワーバトル：全部入り</title>
+<style>
+body { margin:0; text-align:center; background:#eef; font-family:sans-serif; }
+#ui { margin:10px; }
+button { font-size:16px; margin:5px; }
+</style>
+</head>
+<body>
+
+<h2>🐾 どうぶつタワーバトル：オリジナル</h2>
+<div id="ui">
+  <button onclick="useSlow()">⏸ スロー</button>
+  <span>スコア: <span id="score">0</span></span>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+<script>
+const { Engine, Render, Runner, World, Bodies, Body, Events } = Matter;
+
+/* ================= 基本設定 ================= */
+const engine = Engine.create();
+engine.gravity.y = 1;
+
+const render = Render.create({
+  element: document.body,
+  engine,
+  options: { width:400, height:600, wireframes:false, background:"#fff" }
+});
+
+const runner = Runner.create();
+Runner.run(runner, engine);
+Render.run(render);
+
+/* ================= 地面 ================= */
+World.add(engine.world,
+  Bodies.rectangle(200, 590, 400, 40, { isStatic:true, friction:1 })
+);
+
+/* ================= 動物定義 ================= */
+const animals = [
+  { emoji:"🐘", w:90, density:0.004, friction:0.9, restitution:0.05 },
+  { emoji:"🐧", w:60, density:0.002, friction:0.05, restitution:0.1 },
+  { emoji:"🐰", w:50, density:0.001, friction:0.4, restitution:0.6 },
+  { emoji:"🐊", w:80, density:0.003, friction:0.6, restitution:0.05 },
+  { emoji:"🐍", w:70, density:0.0015, friction:0.2, restitution:0.2 }
+];
+
+/* ================= 状態 ================= */
+let current = null;
+let score = 0;
+let slowUsed = false;
+let eventActive = false;
+
+/* ================= スポーン ================= */
+function spawnAnimal() {
+  const danger = Math.random() < 0.08 && score > 5;
+  if (danger) {
+    current = Bodies.circle(200, 80, 25, {
+      density:0.002,
+      restitution:0.9,
+      render:{ text:"💣" }
+    });
+  } else {
+    const a = animals[Math.floor(Math.random()*animals.length)];
+    current = Bodies.rectangle(200, 80, a.w, 40, {
+      density:a.density,
+      friction:a.friction,
+      restitution:a.restitution,
+      render:{ text:a.emoji }
+    });
+  }
+  current.isSleeping = true;
+  World.add(engine.world, current);
+}
+spawnAnimal();
+
+/* ================= 操作 ================= */
+document.addEventListener("keydown", e => {
+  if (!current) return;
+  if (e.key === "ArrowLeft") Body.translate(current, {x:-10,y:0});
+  if (e.key === "ArrowRight") Body.translate(current, {x:10,y:0});
+  if (e.key === " ") drop();
+});
+document.addEventListener("click", drop);
+
+function drop() {
+  if (!current) return;
+  current.isSleeping = false;
+  current = null;
+  score++;
+  document.getElementById("score").textContent = score;
+  triggerWind();
+  setTimeout(spawnAnimal, 600);
+}
+
+/* ================= スキル ================= */
+function useSlow() {
+  if (slowUsed) return;
+  slowUsed = true;
+  engine.timing.timeScale = 0.3;
+  setTimeout(() => engine.timing.timeScale = 1, 3000);
+}
+
+/* ================= 天候（強風） ================= */
+function triggerWind() {
+  if (eventActive || Math.random() > 0.3) return;
+  eventActive = true;
+  let t = 0;
+  const wind = setInterval(() => {
+    engine.world.bodies.forEach(b => {
+      if (!b.isStatic) Body.applyForce(b, b.position, {x:0.0005, y:0});
+    });
+    t++;
+    if (t > 60) {
+      clearInterval(wind);
+      eventActive = false;
+    }
+  }, 50);
+}
+
+/* ================= 爆弾処理 ================= */
+Events.on(engine, "collisionStart", e => {
+  e.pairs.forEach(p => {
+    if (p.bodyA.render.text === "💣" || p.bodyB.render.text === "💣") {
+      engine.world.bodies.forEach(b => {
+        if (!b.isStatic)
+          Body.applyForce(b, b.position, {
+            x:(Math.random()-0.5)*0.05,
+            y:-0.05
+          });
+      });
+    }
+  });
+});
+
+/* ================= 絵文字描画 ================= */
+Events.on(render, "afterRender", () => {
+  const ctx = render.context;
+  ctx.font = "30px serif";
+  ctx.textAlign = "center";
+  engine.world.bodies.forEach(b => {
+    if (b.render.text)
+      ctx.fillText(b.render.text, b.position.x, b.position.y+10);
+  });
+});
+</script>
+</body>
+</html>

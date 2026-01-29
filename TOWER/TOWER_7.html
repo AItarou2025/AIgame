@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>どうぶつタワーバトル</title>
+<style>
+body { margin:0; background:#eef; overflow:hidden; }
+.screen{
+  position:fixed; inset:0;
+  background:rgba(240,240,255,.96);
+  display:flex; flex-direction:column;
+  justify-content:center; align-items:center;
+  z-index:10;
+}
+.hidden{display:none}
+#ui{
+  position:fixed; top:10px; width:100%;
+  text-align:center; font-size:22px;
+  z-index:5;
+}
+button{font-size:20px;padding:10px 20px}
+</style>
+</head>
+<body>
+
+<div id="title" class="screen">
+  <h1>🐾 どうぶつタワー</h1>
+  <button onclick="startGame(event)">▶ スタート</button>
+</div>
+
+<div id="over" class="screen hidden">
+  <h1>💥 くずれた！</h1>
+  <p>スコア：<span id="final"></span></p>
+  <button onclick="location.reload()">もう一回</button>
+</div>
+
+<div id="ui" class="hidden">
+  ⏱ <span id="timer">5.0</span>
+  ／ スコア <span id="score">0</span>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+<script>
+const {Engine,Render,Runner,World,Bodies,Body,Events} = Matter;
+
+let engine, render, runner;
+let current = null;
+let phase = "idle"; // idle / control / falling / gameover
+let startTime = 0;
+let score = 0;
+
+const LIMIT = 5000;
+const animals = [
+  {emoji:"🐘",w:80,h:50,d:0.004},
+  {emoji:"🐧",w:60,h:60,d:0.002},
+  {emoji:"🐰",w:50,h:40,d:0.0015},
+  {emoji:"🐍",w:90,h:30,d:0.001}
+];
+
+/* ===== 初期化 ===== */
+function init(){
+  engine = Engine.create();
+  engine.gravity.y = 1;
+
+  render = Render.create({
+    element: document.body,
+    engine,
+    options:{
+      width:400,height:600,
+      wireframes:false,
+      background:"#fff"
+    }
+  });
+
+  runner = Runner.create();
+  Runner.run(runner,engine);
+  Render.run(render);
+
+  // 土台（少し不安定）
+  World.add(engine.world,
+    Bodies.rectangle(200,590,160,18,{
+      isStatic:true,
+      angle:0.02
+    })
+  );
+
+  setupEvents();
+}
+
+/* ===== 出現 ===== */
+function spawn(){
+  phase = "control";
+  const a = animals[Math.random()*animals.length|0];
+
+  current = Bodies.rectangle(200,120,a.w,a.h,{
+    isStatic:true,          // ★ 落とすまで止める
+    density:a.d,
+    friction:0.5,
+    render:{ text:a.emoji }
+  });
+
+  World.add(engine.world,current);
+  startTime = Date.now();
+}
+
+/* ===== 操作 ===== */
+document.addEventListener("keydown",e=>{
+  if(phase!=="control")return;
+  if(e.key==="ArrowLeft") Body.translate(current,{x:-12,y:0});
+  if(e.key==="ArrowRight")Body.translate(current,{x:12,y:0});
+  if(e.key===" ") drop();
+});
+document.addEventListener("click",()=>{
+  if(phase==="control") drop();
+});
+
+/* ===== 落とす ===== */
+function drop(){
+  if(phase!=="control")return;
+
+  Body.setStatic(current,false); // ★ ここで初めて物理ON
+  phase="falling";
+  score++;
+  document.getElementById("score").textContent=score;
+}
+
+/* ===== 判定 ===== */
+function setupEvents(){
+
+  // 制限時間（操作中のみ）
+  Events.on(engine,"beforeUpdate",()=>{
+    if(phase!=="control")return;
+    const r = LIMIT-(Date.now()-startTime);
+    document.getElementById("timer").textContent =
+      Math.max(0,r/1000).toFixed(1);
+    if(r<=0) drop();
+  });
+
+  // 落下＆ミス判定
+  Events.on(engine,"afterUpdate",()=>{
+    if(phase!=="falling" || !current) return;
+
+    const out =
+      current.position.y > 650 ||
+      current.position.x < 50 ||
+      current.position.x > 350;
+
+    if(out){
+      gameOver();
+      return;
+    }
+
+    // 安定したら次へ
+    if(current.speed < 0.15){
+      current = null;
+      spawn();
+    }
+  });
+
+  // 絵文字描画
+  Events.on(render,"afterRender",()=>{
+    const ctx = render.context;
+    ctx.font="32px serif";
+    ctx.textAlign="center";
+    ctx.textBaseline="middle";
+    engine.world.bodies.forEach(b=>{
+      if(!b.render.text) return;
+      ctx.strokeStyle="#000";
+      ctx.lineWidth=4;
+      ctx.strokeText(b.render.text,b.position.x,b.position.y);
+      ctx.fillStyle="#fff";
+      ctx.fillText(b.render.text,b.position.x,b.position.y);
+    });
+  });
+}
+
+/* ===== 画面 ===== */
+function startGame(e){
+  e.stopPropagation();
+  document.getElementById("title").classList.add("hidden");
+  document.getElementById("ui").classList.remove("hidden");
+  score=0;
+  document.getElementById("score").textContent=0;
+  init();
+  spawn();
+}
+
+function gameOver(){
+  phase="gameover";
+  document.getElementById("final").textContent=score;
+  document.getElementById("over").classList.remove("hidden");
+}
+</script>
+</body>
+</html>

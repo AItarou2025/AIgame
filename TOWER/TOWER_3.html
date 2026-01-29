@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>どうぶつタワーバトル（完全版）</title>
+<style>
+body {
+  margin: 0;
+  background: #eef;
+  text-align: center;
+  font-family: sans-serif;
+}
+#ui {
+  margin: 6px;
+}
+button {
+  font-size: 16px;
+}
+#slowBtn:disabled {
+  opacity: 0.4;
+}
+#timer {
+  font-size: 28px;
+  font-weight: bold;
+}
+#eventText {
+  height: 22px;
+  font-size: 18px;
+  color: #336;
+}
+</style>
+</head>
+<body>
+
+<h2>🐾 どうぶつタワーバトル（オリジナル）</h2>
+
+<div id="ui">
+  <button id="slowBtn" onclick="useSlow()">⏸ スロー</button>
+  <span id="slowInfo"></span><br>
+  ⏱ <span id="timer">5.0</span>　
+  スコア: <span id="score">0</span>
+  <div id="eventText"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+<script>
+const { Engine, Render, Runner, World, Bodies, Body, Events } = Matter;
+
+/* ================= エンジン ================= */
+const engine = Engine.create();
+engine.gravity.y = 1;
+
+const render = Render.create({
+  element: document.body,
+  engine,
+  options: {
+    width: 400,
+    height: 600,
+    wireframes: false,
+    background: "#fff"
+  }
+});
+
+const runner = Runner.create();
+Runner.run(runner, engine);
+Render.run(render);
+
+/* ================= UI ================= */
+const timerEl = document.getElementById("timer");
+const scoreEl = document.getElementById("score");
+const slowBtn = document.getElementById("slowBtn");
+const slowInfo = document.getElementById("slowInfo");
+const eventText = document.getElementById("eventText");
+
+/* ================= 土台（細い！） ================= */
+const base = Bodies.rectangle(200, 585, 160, 20, {
+  isStatic: true,
+  friction: 0.6
+});
+World.add(engine.world, base);
+
+/* ================= 動物定義（強特性） ================= */
+const animalTypes = [
+  { emoji:"🐘", w:90, density:0.006, friction:0.8, restitution:0.02, special:"anchor" },
+  { emoji:"🐧", w:60, density:0.002, friction:0.01, restitution:0.05, special:"slip" },
+  { emoji:"🐰", w:50, density:0.001, friction:0.3, restitution:0.9, special:"bounce" },
+  { emoji:"🐊", w:100, density:0.003, friction:0.4, restitution:0.05, special:"tilt" },
+  { emoji:"🐍", w:70, density:0.0015, friction:0.1, restitution:0.2, special:"roll" }
+];
+
+/* ================= 状態 ================= */
+let current = null;
+let score = 0;
+let dropStartTime = 0;
+let forced = false;
+let outTimer = null;
+
+const DROP_LIMIT = 5000;
+
+/* ================= スキル ================= */
+let slowUsed = false;
+let slowActive = false;
+
+function updateSlowUI() {
+  slowBtn.disabled = slowUsed || slowActive;
+  slowInfo.textContent =
+    slowActive ? "スロー中…" : slowUsed ? "使用済み" : "使用可能";
+}
+
+function useSlow() {
+  if (slowUsed || slowActive) return;
+  slowActive = true;
+  updateSlowUI();
+
+  engine.timing.timeScale = 0.3;
+  setTimeout(() => {
+    engine.timing.timeScale = 1;
+    slowActive = false;
+    slowUsed = true;
+    updateSlowUI();
+  }, 3000);
+}
+updateSlowUI();
+
+/* ================= スポーン ================= */
+function spawnAnimal() {
+  const danger = Math.random() < 0.08 && score > 5;
+
+  if (danger) {
+    current = Bodies.circle(200, 80, 25, {
+      density: 0.002,
+      restitution: 0.9,
+      render:{ text:"💣" }
+    });
+  } else {
+    const a = animalTypes[Math.floor(Math.random()*animalTypes.length)];
+    current = Bodies.rectangle(200, 80, a.w, 40, {
+      density:a.density,
+      friction:a.friction,
+      restitution:a.restitution,
+      render:{ text:a.emoji },
+      special:a.special
+    });
+  }
+
+  World.add(engine.world, current);
+  dropStartTime = Date.now();
+  forced = false;
+}
+spawnAnimal();
+
+/* ================= 操作 ================= */
+document.addEventListener("keydown", e => {
+  if (!current) return;
+  if (e.key === "ArrowLeft") Body.translate(current, {x:-10,y:0});
+  if (e.key === "ArrowRight") Body.translate(current, {x:10,y:0});
+  if (e.key === " ") drop();
+});
+document.addEventListener("click", drop);
+
+function drop() {
+  if (!current) return;
+  current = null;
+  score++;
+  scoreEl.textContent = score;
+  triggerWind();
+  setTimeout(spawnAnimal, 600);
+}
+
+/* ================= タイマー ================= */
+Events.on(engine, "beforeUpdate", () => {
+  if (!current) return;
+
+  const remain = Math.max(0, DROP_LIMIT - (Date.now() - dropStartTime));
+  timerEl.textContent = (remain/1000).toFixed(1);
+
+  timerEl.style.color =
+    remain < 1500 ? "red" :
+    remain < 3000 ? "orange" : "#000";
+
+  if (remain === 0 && !forced) {
+    forced = true;
+    Body.setAngularVelocity(current, (Math.random()-0.5)*0.3);
+    drop();
+  }
+});
+
+/* ================= 天候：風 ================= */
+let windActive = false;
+
+function triggerWind() {
+  if (windActive || Math.random() > 0.3) return;
+
+  windActive = true;
+  eventText.textContent = "🌬 強風！";
+  document.body.style.background = "#eef6ff";
+
+  let t = 0;
+  const wind = setInterval(() => {
+    engine.world.bodies.forEach(b => {
+      if (!b.isStatic) {
+        const s = b.position.y / 600;
+        Body.applyForce(b, b.position, { x:0.0006*s, y:0 });
+      }
+    });
+    if (++t > 80) {
+      clearInterval(wind);
+      windActive = false;
+      eventText.textContent = "";
+      document.body.style.background = "#eef";
+    }
+  }, 50);
+}
+
+/* ================= 爆弾 ================= */
+function explode(bomb) {
+  const radius = 120;
+  const power = 0.03;
+
+  engine.world.bodies.forEach(b => {
+    if (b.isStatic || b === bomb) return;
+    const dx = b.position.x - bomb.position.x;
+    const dy = b.position.y - bomb.position.y;
+    const d = Math.sqrt(dx*dx+dy*dy);
+    if (d < radius) {
+      const k = 1 - d/radius;
+      Body.applyForce(b, b.position, {
+        x: dx/d * power * k,
+        y: dy/d * power * k
+      });
+    }
+  });
+
+  World.remove(engine.world, bomb);
+  document.body.style.background = "#ffdddd";
+  setTimeout(()=>document.body.style.background="#eef",150);
+}
+
+Events.on(engine,"collisionStart",e=>{
+  e.pairs.forEach(p=>{
+    [p.bodyA,p.bodyB].forEach(b=>{
+      if (b.render.text==="💣" && !b.exploded) {
+        b.exploded=true;
+        explode(b);
+      }
+    });
+  });
+});
+
+/* ================= 場外猶予 ================= */
+Events.on(engine,"afterUpdate",()=>{
+  engine.world.bodies.forEach(b=>{
+    if (b.isStatic) return;
+    const out = b.position.x < 120 || b.position.x > 280;
+    if (out && !outTimer) {
+      document.body.style.background="#ffecec";
+      outTimer=setTimeout(()=>location.reload(),2000);
+    }
+    if (!out && outTimer) {
+      clearTimeout(outTimer);
+      outTimer=null;
+      document.body.style.background="#eef";
+    }
+  });
+});
+
+/* ================= 絵文字描画 ================= */
+Events.on(render,"afterRender",()=>{
+  const ctx = render.context;
+  ctx.font="30px serif";
+  ctx.textAlign="center";
+  engine.world.bodies.forEach(b=>{
+    if (b.render.text)
+      ctx.fillText(b.render.text,b.position.x,b.position.y+10);
+  });
+});
+</script>
+</body>
+</html>

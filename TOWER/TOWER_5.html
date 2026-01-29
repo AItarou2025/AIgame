@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>どうぶつタワーバトル</title>
+<style>
+body {
+  margin: 0;
+  background: #eef;
+  font-family: sans-serif;
+  overflow: hidden;
+}
+
+/* ===== 画面レイヤー ===== */
+.screen {
+  position: fixed;
+  inset: 0;
+  background: rgba(238,238,255,0.96);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+.hidden { display: none; }
+
+h1 { font-size: 36px; margin-bottom: 16px; }
+button {
+  font-size: 20px;
+  padding: 10px 24px;
+  cursor: pointer;
+}
+
+/* ===== UI ===== */
+#ui {
+  position: fixed;
+  top: 8px;
+  width: 100%;
+  text-align: center;
+  z-index: 5;
+}
+#timer { font-size: 26px; font-weight: bold; }
+#eventText { height: 20px; }
+
+/* ===== Canvas ===== */
+canvas { display: block; }
+</style>
+</head>
+<body>
+
+<!-- ===== タイトル ===== -->
+<div id="titleScreen" class="screen">
+  <h1>🐾 どうぶつタワーバトル</h1>
+  <button onclick="startGame(event)">▶ スタート</button>
+</div>
+
+<!-- ===== ゲームオーバー ===== -->
+<div id="gameOverScreen" class="screen hidden">
+  <h1>💥 くずれた！</h1>
+  <p>スコア：<span id="finalScore"></span></p>
+  <button onclick="restart()">🔁 もう一回</button>
+</div>
+
+<!-- ===== UI ===== -->
+<div id="ui" class="hidden">
+  ⏱ <span id="timer">--</span>　
+  スコア: <span id="score">0</span>
+  <div id="eventText"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+<script>
+const { Engine, Render, Runner, World, Bodies, Body, Events } = Matter;
+
+/* ================= 状態 ================= */
+let engine, render, runner;
+let current = null;
+let score = 0;
+let gameActive = false;
+let dropStartTime = 0;
+let outTimer = null;
+let canDrop = false;
+
+const DROP_LIMIT = 5000;
+
+/* ================= Matter 初期化 ================= */
+function initMatter() {
+  engine = Engine.create();
+  engine.gravity.y = 1;
+
+  render = Render.create({
+    element: document.body,
+    engine,
+    options: {
+      width: 400,
+      height: 600,
+      wireframes: false,
+      background: "#fff"
+    }
+  });
+
+  runner = Runner.create();
+  Runner.run(runner, engine);
+  Render.run(render);
+
+  // 土台（細くて落ちる）
+  World.add(engine.world,
+    Bodies.rectangle(200, 585, 160, 20, {
+      isStatic: true,
+      friction: 0.6
+    })
+  );
+
+  setupEvents();
+}
+
+/* ================= 動物 ================= */
+const animals = [
+  { emoji:"🐘", w:90, density:0.006, friction:0.8 },
+  { emoji:"🐧", w:60, density:0.002, friction:0.02 },
+  { emoji:"🐰", w:50, density:0.001, restitution:0.9 },
+  { emoji:"🐍", w:70, density:0.0015, friction:0.1 }
+];
+
+/* ================= スポーン ================= */
+function spawnAnimal() {
+  if (!gameActive) return;
+
+  canDrop = false;
+
+  const a = animals[Math.floor(Math.random()*animals.length)];
+  current = Bodies.rectangle(200, 120, a.w, 40, {
+    density: a.density,
+    friction: a.friction || 0.4,
+    restitution: a.restitution || 0.05,
+    render: { text: a.emoji }
+  });
+
+  World.add(engine.world, current);
+
+  dropStartTime = Date.now();
+  document.getElementById("timer").textContent = "5.0";
+
+  setTimeout(() => canDrop = true, 200);
+}
+
+/* ================= 操作 ================= */
+document.addEventListener("keydown", e => {
+  if (!current || !gameActive) return;
+  if (e.key === "ArrowLeft") Body.translate(current,{x:-10,y:0});
+  if (e.key === "ArrowRight") Body.translate(current,{x:10,y:0});
+  if (e.key === " ") drop();
+});
+
+document.addEventListener("click", () => {
+  if (gameActive) drop();
+});
+
+/* ================= 落とす ================= */
+function drop() {
+  if (!current || !canDrop) return;
+
+  current = null;
+  document.getElementById("timer").textContent = "--";
+
+  score++;
+  document.getElementById("score").textContent = score;
+
+  setTimeout(spawnAnimal, 600);
+}
+
+/* ================= 判定 ================= */
+function setupEvents() {
+
+  // タイマー
+  Events.on(engine,"beforeUpdate",()=>{
+    if (!gameActive || !current) return;
+
+    const remain = Math.max(0, DROP_LIMIT - (Date.now()-dropStartTime));
+    document.getElementById("timer").textContent =
+      (remain/1000).toFixed(1);
+
+    if (remain === 0) drop();
+  });
+
+  // 場外判定（横＋下）
+  Events.on(engine,"afterUpdate",()=>{
+    if (!gameActive) return;
+
+    engine.world.bodies.forEach(b=>{
+      if (b.isStatic) return;
+
+      const outX = b.position.x < 80 || b.position.x > 320;
+      const outY = b.position.y > 650;
+
+      if ((outX || outY) && !outTimer) {
+        outTimer = setTimeout(gameOver, 2000);
+      }
+
+      if (!(outX || outY) && outTimer) {
+        clearTimeout(outTimer);
+        outTimer = null;
+      }
+    });
+  });
+
+  // 絵文字描画
+  Events.on(render,"afterRender",()=>{
+    const ctx = render.context;
+    ctx.font = "32px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    engine.world.bodies.forEach(b=>{
+      if (!b.render.text) return;
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "#000";
+      ctx.strokeText(b.render.text, b.position.x, b.position.y);
+      ctx.fillStyle = "#fff";
+      ctx.fillText(b.render.text, b.position.x, b.position.y);
+    });
+  });
+}
+
+/* ================= 画面制御 ================= */
+function startGame(e) {
+  e.stopPropagation(); // ★ 即落下防止
+
+  document.getElementById("titleScreen").classList.add("hidden");
+  document.getElementById("ui").classList.remove("hidden");
+
+  initMatter();
+  score = 0;
+  document.getElementById("score").textContent = score;
+  gameActive = true;
+
+  spawnAnimal();
+}
+
+function gameOver() {
+  if (!gameActive) return;
+  gameActive = false;
+
+  document.getElementById("finalScore").textContent = score;
+  document.getElementById("gameOverScreen").classList.remove("hidden");
+}
+
+function restart() {
+  location.reload();
+}
+</script>
+</body>
+</html>
