@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>1ボタン運命回避 改良版</title>
+<style>
+  body { margin:0; background:#111; color:white; text-align:center; }
+  canvas { background:#000; display:block; margin:auto; }
+</style>
+</head>
+<body>
+<h2>押している間だけ重力反転</h2>
+<p>SPACE or クリック</p>
+<canvas id="game" width="400" height="600"></canvas>
+
+<script>
+const c = document.getElementById("game");
+const ctx = c.getContext("2d");
+
+let y = 300;
+let vy = 0;
+let gravity = 0.25;   // 弱く
+let invert = false;
+let walls = [];
+let frame = 0;
+let alive = true;
+let start = Date.now();
+let grace = 180; // 3秒猶予
+
+document.onmousedown = document.onkeydown = () => invert = true;
+document.onmouseup = document.onkeyup = () => invert = false;
+
+function spawnWall(first=false) {
+  let safeY = first ? 300 : Math.random() * 350 + 80;
+  walls.push({ x: 420, safeY });
+}
+
+spawnWall(true);
+
+function update() {
+  if (!alive) return;
+
+  frame++;
+
+  if (frame % 120 === 0) spawnWall();
+
+  vy += invert ? -gravity : gravity;
+  y += vy;
+  vy *= 0.95;
+
+  if (grace <= 0) {
+    if (y < 10 || y > 590) alive = false;
+  } else {
+    grace--;
+  }
+
+  walls.forEach(w => w.x -= 2.2);
+
+  walls.forEach(w => {
+    if (w.x < 60 && w.x > 40 && grace <= 0) {
+      if (y < w.safeY - 45 || y > w.safeY + 45) alive = false;
+    }
+  });
+
+  walls = walls.filter(w => w.x > -50);
+}
+
+function draw() {
+  ctx.clearRect(0,0,400,600);
+
+  // player
+  ctx.fillStyle = grace > 0 ? "lime" : "cyan";
+  ctx.beginPath();
+  ctx.arc(50, y, 10, 0, Math.PI*2);
+  ctx.fill();
+
+  // walls
+  ctx.fillStyle = "red";
+  walls.forEach(w => {
+    ctx.fillRect(w.x, 0, 20, w.safeY - 45);
+    ctx.fillRect(w.x, w.safeY + 45, 20, 600);
+  });
+
+  // timer
+  ctx.fillStyle = "white";
+  ctx.font = "16px sans-serif";
+  ctx.fillText(`Time ${(Date.now()-start)/1000 | 0}s`, 10, 20);
+
+  if (!alive) {
+    ctx.font = "30px sans-serif";
+    ctx.fillText("GAME OVER", 100, 300);
+  }
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
