@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<title>ロケット浮遊ゲーム</title>
+
+<style>
+html,body{
+margin:0;
+padding:0;
+overflow:hidden;
+background:#111;
+touch-action:none;
+font-family:"Segoe UI",Tahoma,Geneva,Verdana,sans-serif;
+color:white;
+}
+
+canvas{display:block;}
+
+#titleScreen{
+position:absolute;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%);
+background:rgba(0,0,0,0.7);
+padding:30px 20px 40px;
+border-radius:15px;
+width:320px;
+text-align:center;
+}
+
+#titleScreen img{
+width:120px;
+margin-bottom:20px;
+}
+
+#titleScreen button{
+font-size:18px;
+margin:8px 6px;
+padding:8px 16px;
+cursor:pointer;
+border-radius:6px;
+border:none;
+background:#0a74da;
+color:white;
+}
+
+.selected{
+background:#2ecc71 !important;
+}
+
+#difficultyLabel{
+margin-top:10px;
+font-size:18px;
+color:#f1c40f;
+}
+
+#score{
+position:absolute;
+left:10px;
+top:10px;
+font-size:24px;
+display:none;
+}
+
+#gameover{
+position:absolute;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%);
+font-size:32px;
+text-align:center;
+display:none;
+}
+
+#countdown{
+position:absolute;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%);
+font-size:40px;
+display:none;
+}
+
+</style>
+</head>
+
+<body>
+
+<canvas id="game"></canvas>
+
+<audio id="bgm" src="bgm.mp3" loop></audio>
+
+<div id="titleScreen">
+
+<img src="https://cdn-icons-png.flaticon.com/512/3211/3211271.png">
+
+<div style="font-size:28px;margin-bottom:16px;">
+🚀 ロケット浮遊ゲーム 🚀
+</div>
+
+<div>
+<button onclick="setDifficulty('easy')" id="easyBtn">イージー</button>
+<button onclick="setDifficulty('normal')" id="normalBtn" class="selected">ノーマル</button>
+<button onclick="setDifficulty('hard')" id="hardBtn">ハード</button>
+</div>
+
+<div id="difficultyLabel">
+現在の難易度：ノーマル
+</div>
+
+<div style="margin-top:16px;">
+<button id="bgmToggleBtn" onclick="toggleBGM()">BGM: オン</button>
+</div>
+
+<div style="margin-top:20px;">
+<button onclick="startCountdown()">スタート</button>
+</div>
+
+</div>
+
+<div id="score">0.0 秒</div>
+<div id="gameover">GAME OVER</div>
+<div id="countdown"></div>
+
+<script>
+
+const canvas=document.getElementById("game")
+const ctx=canvas.getContext("2d")
+
+canvas.width=window.innerWidth
+canvas.height=window.innerHeight
+
+let player={x:80,y:canvas.height/2,width:40,height:40,vy:0,color:"#0f0"}
+
+let pressing=false
+let gameStarted=false
+let gameOver=false
+let countdownActive=false
+
+let startTime,elapsedTime=0
+
+let obstacles=[]
+let obstacleTimer=0
+let obstacleSpeed=4
+
+let gravity=0.5
+let lift=-1
+
+let difficulty="normal"
+let bgmOn=true
+
+const bgm=document.getElementById("bgm")
+bgm.volume=0.3
+
+function toggleBGM(){
+
+bgmOn=!bgmOn
+
+document.getElementById("bgmToggleBtn").textContent=
+`BGM: ${bgmOn?"オン":"オフ"}`
+
+if(bgmOn) bgm.play()
+else bgm.pause()
+
+}
+
+function setDifficulty(level){
+
+difficulty=level
+
+document.getElementById("easyBtn").classList.remove("selected")
+document.getElementById("normalBtn").classList.remove("selected")
+document.getElementById("hardBtn").classList.remove("selected")
+
+if(level==="easy"){
+document.getElementById("easyBtn").classList.add("selected")
+document.getElementById("difficultyLabel").innerText="現在の難易度：イージー"
+}
+
+if(level==="normal"){
+document.getElementById("normalBtn").classList.add("selected")
+document.getElementById("difficultyLabel").innerText="現在の難易度：ノーマル"
+}
+
+if(level==="hard"){
+document.getElementById("hardBtn").classList.add("selected")
+document.getElementById("difficultyLabel").innerText="現在の難易度：ハード"
+}
+
+}
+
+function startCountdown(){
+
+document.getElementById("titleScreen").style.display="none"
+document.getElementById("countdown").style.display="block"
+
+countdownActive=true
+
+let count=3
+const el=document.getElementById("countdown")
+
+const timer=setInterval(()=>{
+
+if(count>0){
+el.innerText=count
+count--
+}
+
+else if(count===0){
+el.innerText="スタート！"
+count--
+}
+
+else{
+
+clearInterval(timer)
+el.style.display="none"
+
+countdownActive=false
+startGame()
+
+}
+
+},1000)
+
+}
+
+function startGame(){
+
+gameStarted=true
+resetGame()
+
+document.getElementById("score").style.display="block"
+
+if(bgmOn) bgm.play()
+
+}
+
+function resetGame(){
+
+player.y=canvas.height/2
+player.vy=0
+
+obstacles=[]
+obstacleTimer=0
+gameOver=false
+
+startTime=Date.now()
+
+requestAnimationFrame(gameLoop)
+
+}
+
+function createObstacle(){
+
+const gap=150
+const minHeight=50
+const maxHeight=canvas.height/2
+
+let height=Math.random()*(maxHeight-minHeight)+minHeight
+
+let top={x:canvas.width,y:0,width:40,height:height}
+let bottom={x:canvas.width,y:height+gap,width:40,height:canvas.height-height-gap}
+
+obstacles.push(top,bottom)
+
+}
+
+function checkCollision(a,b){
+
+return(
+a.x<b.x+b.width &&
+a.x+a.width>b.x &&
+a.y<b.y+b.height &&
+a.y+a.height>b.y
+)
+
+}
+
+function update(){
+
+player.vy+=pressing?lift:gravity
+player.vy=Math.max(Math.min(player.vy,5),-5)
+
+player.y+=player.vy
+
+if(player.y<0)player.y=0
+if(player.y+player.height>canvas.height)
+player.y=canvas.height-player.height
+
+for(let obs of obstacles){
+
+obs.x-=obstacleSpeed
+
+if(checkCollision(player,obs)){
+
+gameOver=true
+
+document.getElementById("gameover").style.display="block"
+
+bgm.pause()
+
+}
+
+}
+
+obstacles=obstacles.filter(o=>o.x+o.width>0)
+
+obstacleTimer++
+
+const spawnInterval=
+difficulty==="easy"?120:
+difficulty==="hard"?70:90
+
+if(obstacleTimer>spawnInterval){
+
+createObstacle()
+obstacleTimer=0
+
+}
+
+elapsedTime=(Date.now()-startTime)/1000
+
+document.getElementById("score").innerText=
+elapsedTime.toFixed(1)+" 秒"
+
+}
+
+function draw(){
+
+ctx.clearRect(0,0,canvas.width,canvas.height)
+
+ctx.fillStyle=player.color
+ctx.fillRect(player.x,player.y,player.width,player.height)
+
+ctx.fillStyle="#f00"
+
+for(let obs of obstacles){
+
+ctx.fillRect(obs.x,obs.y,obs.width,obs.height)
+
+}
+
+}
+
+function gameLoop(){
+
+if(!gameOver){
+
+update()
+draw()
+
+requestAnimationFrame(gameLoop)
+
+}
+
+}
+
+canvas.addEventListener("mousedown",()=>pressing=true)
+canvas.addEventListener("mouseup",()=>pressing=false)
+canvas.addEventListener("mouseleave",()=>pressing=false)
+
+canvas.addEventListener("touchstart",e=>{
+pressing=true
+e.preventDefault()
+})
+
+canvas.addEventListener("touchend",e=>{
+pressing=false
+e.preventDefault()
+})
+
+</script>
+</body>
+</html>

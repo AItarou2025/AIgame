@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>円環ウォーズ</title>
+
+<style>
+body{
+margin:0;
+background:#050818;
+overflow:hidden;
+font-family:sans-serif;
+color:white;
+}
+
+canvas{
+display:block;
+margin:auto;
+background:#061022;
+}
+
+#ui{
+position:absolute;
+left:10px;
+top:10px;
+background:rgba(0,0,0,.35);
+padding:12px;
+border-radius:10px;
+}
+
+#title{
+position:absolute;
+top:40%;
+width:100%;
+text-align:center;
+font-size:40px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="title">クリックしてゲーム開始</div>
+<canvas id="game"></canvas>
+<div id="ui"></div>
+
+<script>
+
+const canvas=document.getElementById("game")
+const ctx=canvas.getContext("2d")
+
+let W=canvas.width=innerWidth
+let H=canvas.height=innerHeight
+
+const ui=document.getElementById("ui")
+const title=document.getElementById("title")
+
+let gameState="title"
+
+let player={x:W/2,y:H/2,angle:0}
+
+let bullets=[]
+let enemies=[]
+let particles=[]
+
+let score=0
+let lives=3
+let weaponLevel=1
+
+let specialKillCount=0
+let bulletRows=1
+
+let lastTime=0
+let spawnTimer=0
+let fireTimer=0
+
+let highScore=localStorage.getItem("ringwars")||0
+
+const bgm=new Audio("bgm.mp3")
+bgm.loop=true
+bgm.volume=0.5
+
+addEventListener("resize",()=>{
+
+W=canvas.width=innerWidth
+H=canvas.height=innerHeight
+
+player.x=W/2
+player.y=H/2
+
+})
+
+canvas.addEventListener("mousemove",e=>{
+
+const r=canvas.getBoundingClientRect()
+
+let x=(e.clientX-r.left)*(canvas.width/r.width)
+let y=(e.clientY-r.top)*(canvas.height/r.height)
+
+player.angle=Math.atan2(y-player.y,x-player.x)
+
+})
+
+canvas.addEventListener("click",()=>{
+
+if(gameState==="title") startGame()
+
+})
+
+function startGame(){
+
+title.style.display="none"
+
+score=0
+lives=3
+weaponLevel=1
+specialKillCount=0
+bulletRows=1
+
+bullets=[]
+enemies=[]
+particles=[]
+
+spawnTimer=0
+fireTimer=0
+
+gameState="play"
+
+bgm.currentTime=0
+bgm.play()
+
+requestAnimationFrame(loop)
+
+}
+
+function spawnEnemy(){
+
+const ring=Math.min(W,H)*0.48
+const a=Math.random()*Math.PI*2
+
+let type="normal"
+
+if(Math.random()<0.15) type="special"
+
+let enemy={
+x:player.x+Math.cos(a)*ring,
+y:player.y+Math.sin(a)*ring,
+type:type,
+r:type==="special"?30:25,
+speed:0.05+Math.random()*0.02,
+hp:type==="special"?5:2
+}
+
+enemies.push(enemy)
+
+}
+
+function spawnBoss(){
+
+let boss={
+x:100,
+y:100,
+type:"boss",
+r:80,
+speed:0.03,
+hp:80
+}
+
+enemies.push(boss)
+
+}
+
+function shoot(){
+
+let now=performance.now()
+
+if(now-fireTimer<220)return
+
+fireTimer=now
+
+let speed=0.7 + weaponLevel*0.2
+
+for(let i=0;i<bulletRows;i++){
+
+let offset=(i-(bulletRows-1)/2)*10
+
+bullets.push({
+
+x:player.x + Math.cos(player.angle+Math.PI/2)*offset,
+y:player.y + Math.sin(player.angle+Math.PI/2)*offset,
+
+dx:Math.cos(player.angle)*speed,
+dy:Math.sin(player.angle)*speed,
+
+life:2000
+
+})
+
+}
+
+}
+
+function explosion(x,y){
+
+for(let i=0;i<20;i++){
+
+particles.push({
+
+x,
+y,
+dx:(Math.random()-0.5)*4,
+dy:(Math.random()-0.5)*4,
+life:500
+
+})
+
+}
+
+}
+
+function loop(t){
+
+let dt=t-lastTime
+lastTime=t
+
+spawnTimer+=dt
+
+if(spawnTimer>1000){
+
+spawnEnemy()
+spawnTimer=0
+
+}
+
+if(score%30===0 && score>0){
+
+spawnBoss()
+score++
+
+}
+
+shoot()
+
+for(let i=bullets.length-1;i>=0;i--){
+
+let b=bullets[i]
+
+b.x+=b.dx*dt
+b.y+=b.dy*dt
+
+b.life-=dt
+
+if(b.life<0) bullets.splice(i,1)
+
+}
+
+for(let i=enemies.length-1;i>=0;i--){
+
+let e=enemies[i]
+
+let a=Math.atan2(player.y-e.y,player.x-e.x)
+
+e.x+=Math.cos(a)*e.speed*dt
+e.y+=Math.sin(a)*e.speed*dt
+
+let d=Math.hypot(e.x-player.x,e.y-player.y)
+
+if(d<e.r+20){
+
+enemies.splice(i,1)
+lives--
+
+explosion(player.x,player.y)
+
+if(lives<=0) gameOver()
+
+continue
+
+}
+
+for(let j=bullets.length-1;j>=0;j--){
+
+let b=bullets[j]
+
+let d=Math.hypot(e.x-b.x,e.y-b.y)
+
+if(d<e.r){
+
+bullets.splice(j,1)
+
+e.hp--
+
+if(e.hp<=0){
+
+explosion(e.x,e.y)
+
+score++
+
+if(e.type==="special"){
+
+specialKillCount++
+weaponLevel++
+
+if(specialKillCount%3===0){
+
+bulletRows++
+
+}
+
+}
+
+if(score>highScore){
+
+highScore=score
+localStorage.setItem("ringwars",highScore)
+
+}
+
+enemies.splice(i,1)
+
+}
+
+break
+
+}
+
+}
+
+}
+
+for(let i=particles.length-1;i>=0;i--){
+
+let p=particles[i]
+
+p.x+=p.dx
+p.y+=p.dy
+
+p.life-=dt
+
+if(p.life<0) particles.splice(i,1)
+
+}
+
+draw()
+
+if(gameState==="play")
+requestAnimationFrame(loop)
+
+}
+
+function draw(){
+
+ctx.fillStyle="#061022"
+ctx.fillRect(0,0,W,H)
+
+ctx.beginPath()
+ctx.arc(player.x,player.y,Math.min(W,H)*0.48,0,Math.PI*2)
+ctx.strokeStyle="#223"
+ctx.lineWidth=4
+ctx.stroke()
+
+ctx.save()
+
+ctx.translate(player.x,player.y)
+ctx.rotate(player.angle)
+
+ctx.fillStyle="#6ea8ff"
+
+ctx.beginPath()
+ctx.arc(0,0,20,0,Math.PI*2)
+ctx.fill()
+
+ctx.fillRect(0,-4,35,8)
+
+ctx.restore()
+
+ctx.fillStyle="#ffd875"
+
+for(let b of bullets){
+
+ctx.beginPath()
+ctx.arc(b.x,b.y,4,0,Math.PI*2)
+ctx.fill()
+
+}
+
+for(let e of enemies){
+
+if(e.type==="boss")
+ctx.fillStyle="#4b7bff"
+else if(e.type==="special")
+ctx.fillStyle="#a14bff"
+else
+ctx.fillStyle="#ff4b4b"
+
+ctx.beginPath()
+ctx.arc(e.x,e.y,e.r,0,Math.PI*2)
+ctx.fill()
+
+}
+
+ctx.fillStyle="orange"
+
+for(let p of particles){
+
+ctx.fillRect(p.x,p.y,3,3)
+
+}
+
+ui.innerHTML=
+"Score:"+score+
+"<br>High:"+highScore+
+"<br>Lives:"+lives+
+"<br>Weapon Lv:"+weaponLevel+
+"<br>Bullet Rows:"+bulletRows
+
+}
+
+function gameOver(){
+
+gameState="over"
+
+bgm.pause()
+
+title.innerHTML="GAME OVER<br>クリックで再開"
+title.style.display="block"
+
+}
+
+</script>
+</body>
+</html>
